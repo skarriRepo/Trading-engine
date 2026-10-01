@@ -1,5 +1,35 @@
 # Trading Engine — streaming-first rebuild
 
+## Keep credentials across updates
+
+Save your existing credentials once in
+`%USERPROFILE%\.trading_engine\credentials.env` on Windows (or
+`~/.trading_engine/credentials.env` on macOS/Linux). The file uses ordinary
+`.env` lines, for example:
+
+```dotenv
+TRADIER_ACCESS_TOKEN=your_sandbox_token
+TRADIER_LIVE_DATA_TOKEN=your_production_data_token
+TRADIER_ACCOUNT_ID=your_sandbox_account_id
+UW_API_KEY=your_uw_token
+```
+
+If you already keep these in another local file, set a persistent user
+environment variable once in PowerShell, then open a new terminal:
+
+```powershell
+[Environment]::SetEnvironmentVariable('ENGINE_CREDENTIALS_FILE', 'C:\path\to\my-private.env', 'User')
+```
+
+You can still keep non-secret settings such as `MAX_ORDER_DEBIT=6000` in the
+checkout's `.env`. Credential precedence is **process environment → private
+file → checkout `.env`**. Only the four credential keys above are read from
+the private file; non-secret settings there are ignored. If
+`ENGINE_CREDENTIALS_FILE` is set but the file is missing, startup fails rather
+than using a stale account from the checkout. Keep the private file outside
+the repository and do not commit it. The sandbox token is used for sandbox
+orders; the production data token supplies live quotes for all decisions.
+
 Sandbox entry orders that remain unfilled past the configured timeout are
 canceled. A symbol becomes eligible for a later signal only after Tradier
 confirms the cancellation had zero executions, no position is held for that

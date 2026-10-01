@@ -1,4 +1,6 @@
 .env
+credentials.env
+secrets.env
 __pycache__/
 *.pyc
 sandbox_orders.json

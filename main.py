@@ -3,8 +3,8 @@ a live Tradier connection into TradingRuntime and the dashboard, and runs
 both in one process.
 
 Run:
-    cp .env.example .env
-    # edit .env: set sandbox TRADIER_ACCESS_TOKEN and TRADIER_LIVE_DATA_TOKEN
+    # Save credentials once in ~/.trading_engine/credentials.env or set
+    # ENGINE_CREDENTIALS_FILE to an existing private .env path.
     pip install -r requirements.txt
     python main.py
 
@@ -41,7 +41,7 @@ import threading
 import time
 import math
 
-from dotenv import load_dotenv
+from trading_engine.credentials import load_engine_environment
 
 from trading_engine.tradier_client import TradierRestClient, TradierConfig, PRODUCTION_BASE, SANDBOX_BASE
 from trading_engine.tradier_stream import TradierStreamClient
@@ -61,7 +61,7 @@ from datetime import datetime
 
 
 def build_runtime() -> tuple:
-    load_dotenv()
+    load_engine_environment()
 
     env = os.environ.get("TRADIER_ENV", "sandbox").strip().lower()
     if env not in {"production", "sandbox"}:
@@ -242,7 +242,7 @@ def main() -> None:
     except Exception as exc:
         print(f"Failed to start ({type(exc).__name__}): {exc}", file=sys.stderr)
         if isinstance(exc, TradierAuthError):
-            print("Check the Tradier token and environment in .env.example.", file=sys.stderr)
+            print("Check the Tradier tokens in the private credentials file or environment.", file=sys.stderr)
         if os.environ.get("ENGINE_DEBUG_STARTUP", "").lower() == "true":
             import traceback
             traceback.print_exc()
