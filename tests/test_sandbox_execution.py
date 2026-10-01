@@ -140,6 +140,57 @@ class SandboxOrderLifecycle(unittest.TestCase):
         self.assertFalse(self.rt.positions)
         self.assertIn("SPY", self.executor.blocked)
 
+    def test_confirmed_zero_fill_cancel_releases_symbol_for_next_signal(self):
+        self.enter()
+        self.broker.rows[0].update(status="canceled", exec_quantity=0)
+        self.executor.reconcile()
+        self.assertNotIn("SPY", self.executor.pending)
+        self.assertNotIn("SPY", self.executor.blocked)
+        self.assertNotIn("SPY", self.rt.pending_symbols)
+        self.assertNotIn("SPY", self.rt.blocked_symbols)
+        self.enter()
+        self.assertEqual(self.broker.post_count, 2)
+
+    def test_startup_releases_persisted_confirmed_cancel_only(self):
+        self.enter()
+        self.broker.rows[0].update(status="canceled", exec_quantity=0)
+        self.executor.reconcile()
+        self.executor.block("SPY", "Broker buy_to_open canceled (1)")
+        restarted = SandboxExecution(self.broker, journal_path=self.path)
+        new_rt = TradingRuntime(order_executor=restarted)
+        restarted.attach(new_rt)
+        self.assertNotIn("SPY", restarted.blocked)
+        self.assertNotIn("SPY", new_rt.blocked_symbols)
+
+    def test_missing_execution_quantity_keeps_cancel_blocked(self):
+        self.enter()
+        self.broker.rows[0]["status"] = "canceled"
+        self.executor.reconcile()
+        self.assertIn("SPY", self.executor.blocked)
+
+    def test_other_working_order_keeps_cancel_blocked(self):
+        self.enter()
+        self.broker.rows[0].update(status="canceled", exec_quantity=0)
+        self.broker.rows.append(dict(id=2, symbol="SPY", option_symbol=OCC,
+                                     status="pending", side="buy_to_open"))
+        self.executor.reconcile()
+        self.assertIn("SPY", self.executor.blocked)
+
+    def test_held_contract_keeps_cancel_blocked(self):
+        self.enter()
+        self.broker.rows[0].update(status="canceled", exec_quantity=0)
+        self.broker.held = [dict(symbol=OCC, quantity=1)]
+        self.executor.reconcile()
+        self.assertIn("SPY", self.executor.pending)
+        self.assertEqual(self.broker.post_count, 1)
+
+    def test_mismatched_contract_keeps_cancel_blocked(self):
+        self.enter()
+        self.broker.rows[0].update(status="canceled", exec_quantity=0,
+                                   option_symbol="SPY260930P00600000")
+        self.executor.reconcile()
+        self.assertIn("SPY", self.executor.blocked)
+
     def test_unknown_post_recovers_by_tag_without_resubmitting(self):
         self.broker.fail_post = True
         self.enter()

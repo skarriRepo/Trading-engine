@@ -13,6 +13,7 @@ import threading
 import time
 import uuid
 import math
+import re
 from datetime import datetime, time as clock_time
 from zoneinfo import ZoneInfo
 
@@ -81,6 +82,44 @@ class SandboxExecution:
     def _broker_qty(positions: list, occ: str) -> float:
         return sum(float(p.get("quantity") or 0) for p in positions
                    if str(p.get("symbol") or "").upper() == occ.upper())
+
+    def _canceled_entry_is_clear(self, symbol: str, order: dict, order_id: str,
+                                 expected_occ: str | None = None) -> bool:
+        """Require a terminal zero-fill receipt and an empty broker symbol."""
+        if (str(order.get("id") or "") != str(order_id)
+                or str(order.get("status") or "").lower() != "canceled"
+                or str(order.get("side") or "").lower() != "buy_to_open"
+                or order.get("exec_quantity") is None
+                or float(order["exec_quantity"]) != 0
+                or not str(order.get("option_symbol") or "").upper().startswith(symbol.upper())
+                or (expected_occ is not None and
+                    str(order["option_symbol"]).upper() != expected_occ.upper())
+                or symbol in self.open):
+            return False
+        if any(float(p.get("quantity") or 0) != 0 and
+               str(p.get("symbol") or "").upper().startswith(symbol.upper())
+               for p in self.client.positions()):
+            return False
+        working = {"pending", "open", "partially_filled", "pending_cancel",
+                   "accepted_for_bidding", "held", "calculated"}
+        return not any(str(o.get("status") or "").lower() in working and
+                       (str(o.get("option_symbol") or "").upper().startswith(symbol.upper())
+                        or str(o.get("symbol") or "").upper() == symbol.upper())
+                       for o in self.client.orders())
+
+    def _release_old_canceled_entries(self) -> None:
+        """Reconcile prior journal blocks before restoring them to the runtime."""
+        for symbol, reason in list(self.blocked.items()):
+            match = re.fullmatch(r"Broker buy_to_open canceled \((\d+)\)", str(reason))
+            if not match or symbol in self.pending:
+                continue
+            order_id = match.group(1)
+            if self._canceled_entry_is_clear(symbol, self.client.get_order(order_id), order_id):
+                self.blocked.pop(symbol)
+                self._save()
+                if self.audit:
+                    self.audit.emit("BROKER_ENTRY_CANCELED_RELEASED", symbol=symbol,
+                                    order_id=order_id, source="STARTUP_RECONCILIATION")
 
     def _recover_manual_close(self, symbol: str, record: dict) -> bool:
         """Journal an independently filled close, using only a unique broker receipt."""
@@ -171,6 +210,7 @@ class SandboxExecution:
                 runtime.restore_broker_position(record)
             for symbol in self.pending:
                 runtime.pending_symbols.add(symbol)
+            self._release_old_canceled_entries()
             for symbol in self.blocked:
                 runtime.blocked_symbols.add(symbol)
             self.reconcile()
@@ -388,6 +428,21 @@ class SandboxExecution:
                     if status in {"rejected", "canceled", "expired", "error"}:
                         if float(order.get("exec_quantity") or 0) > 0:
                             raise TradierOrderError("Terminal order has a partial execution; manual broker reconciliation required.")
+                        if (status == "canceled" and r["side"] == "buy_to_open"
+                                and self._canceled_entry_is_clear(symbol, order, r["order_id"],
+                                                                   r["occ_symbol"])):
+                            self.pending.pop(symbol)
+                            try:
+                                self._save()
+                            except Exception:
+                                self.pending[symbol] = r
+                                raise
+                            self.runtime.pending_symbols.discard(symbol)
+                            if self.audit:
+                                self.audit.emit("BROKER_ENTRY_CANCELED_RELEASED", symbol=symbol,
+                                                order_id=r["order_id"], occ_symbol=r["occ_symbol"],
+                                                source="ORDER_RECONCILIATION")
+                            continue
                         broker_qty = self._broker_qty(self.client.positions(), r["occ_symbol"])
                         if (r["side"] == "buy_to_open" and broker_qty > 0) or (
                                 r["side"] == "sell_to_close" and broker_qty < r["quantity"]):
