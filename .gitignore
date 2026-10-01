@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+sandbox_orders.json
+sandbox_orders.json.tmp
+logs/

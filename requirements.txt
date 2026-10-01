@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=7.0
+httpx>=0.27
+requests>=2.31
+charset-normalizer>=3.3
+websocket-client>=1.7
+python-dotenv>=1.0
+tzdata>=2025.1
