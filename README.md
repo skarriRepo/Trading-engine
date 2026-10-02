@@ -82,6 +82,23 @@ filter) and implements `TradingRuntime.option_entry_price_provider`.
 | `trading_engine/entry_pipeline.py` | PSAR flip trigger with candle momentum and UW directional flow recorded as observations, plus optional assessment of actual fresh gamma levels. Neither momentum nor UW availability blocks entry. No structure rule or fabricated ATR target is used for entry. |
 | `trading_engine/contract_selection.py` | Selects the option contract using current underlying price from a production chain prefetched on a bounded background worker. A missing or expired snapshot refuses the one-shot entry. |
 | `trading_engine/exit_pipeline.py` | `PositionState`, `evaluate_exit` — the exit ladder. Recomputes PSAR fresh every call; never reads a cached direction field. |
+
+### Reversal marker exit candidate
+
+The engine computes the chart's bullish/bearish 9-count momentum phase from
+**completed underlying bars**. An opposing phase on a bar that began after
+entry can request an exit only when a fresh live option bid has retreated by
+at least the observed bid/ask spread from its live bid peak. The perfected
+`P` flag is logged separately but is not required. The event is called
+`OPPOSITE_REVERSAL_PHASE_BID_WEAK`; PSAR and emergency exits retain priority.
+
+This rule defaults to observation only: `POSITION_OBSERVATION` records
+`reversal_phase_side`, `reversal_phase_perfected`,
+`reversal_phase_opposes_position`, `reversal_bid_retreat`, and
+`reversal_bid_confirmation`. The available candle replay does not contain
+contemporaneous option bids for these markers, so it cannot validate an
+executable exit or its P&L. Set `REVERSAL_PHASE_EXIT=true` in `.env` to let a
+confirmed candidate request a sandbox exit after reviewing bid-level replay.
 | `trading_engine/contract_selection.py` | `select_contract`, `make_option_entry_price_provider` — turns an option chain into a real, ask-priced entry. |
 | `trading_engine/tradier_client.py` | Tradier REST client — quotes, time-and-sales, expirations, option chains. Sandbox token from `TRADIER_ACCESS_TOKEN`; a separate production market-data client can use `TRADIER_LIVE_DATA_TOKEN`. |
 | `trading_engine/history_warmup.py` | One-time intraday 1-minute time-and-sales fetch; aggregates complete contiguous 2-minute OHLCV bars for PSAR and momentum without replaying historical entries. |

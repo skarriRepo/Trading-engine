@@ -148,11 +148,22 @@ class TradingRuntime:
         opposite = "PUT" if pos.direction == "CALL" else "CALL"
         uw = uw_confluence(snap, opposite)
         last_bar = bars[-1] if bars else None
+        from .exit_pipeline import completed_reversal_phase
+        reversal_side, reversal_perfected = completed_reversal_phase(bars)
+        reversal_opposes = bool(last_bar and reversal_side == opposite and
+                                last_bar.ts >= pos.opened_ts and
+                                snap.price_state == snap.bar_state == "FRESH")
         return dict(symbol=symbol, trade_id=trade_id, occ_symbol=pos.occ_symbol,
                     direction=pos.direction, market_ts=now, opened_ts=pos.opened_ts,
                     underlying_price=snap.price, price_state=snap.price_state,
                     bar_state=snap.bar_state, completed_bar_count=len(bars),
                     completed_bar=vars(last_bar).copy() if last_bar else None,
+                    reversal_phase_side=reversal_side or None,
+                    reversal_phase_perfected=reversal_perfected,
+                    reversal_phase_opposes_position=reversal_opposes,
+                    reversal_bid_retreat=round(giveback, 4),
+                    reversal_bid_confirmation=bool(reversal_opposes and quote_fresh and
+                                                   spread > 0 and giveback >= spread-self.exit_config.epsilon),
                     psar_direction=psar[-1].direction if psar else None,
                     structure=structure_from_bars(bars) if bars else "MIXED",
                     momentum=momentum_from_bars(bars) if bars else "NOT_READY",

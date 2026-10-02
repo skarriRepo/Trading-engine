@@ -80,6 +80,33 @@ def structure_ok(direction: str, structure: str) -> bool:
     return (direction == "CALL" and structure == "HH/HL") or (direction == "PUT" and structure == "LH/LL")
 
 
+def completed_reversal_phase(bars: Tuple[Bar, ...]) -> Tuple[str, bool]:
+    """Return the latest completed Lux-style 9-count and its perfected flag.
+
+    A lower close than four bars ago counts toward a bullish reversal;
+    otherwise the candle counts toward a bearish reversal. Only a *new*
+    completion on the latest bar is returned; old chart markers cannot fire
+    later in a position. This deliberately excludes intrabar Pine alerts.
+    """
+    if len(bars) < 13:
+        return "", False
+    bullish = bearish = 0
+    for i in range(4, len(bars)):
+        if bars[i].close < bars[i - 4].close:
+            bullish, bearish = (1 if bullish == 9 else bullish + 1), 0
+        else:
+            bearish, bullish = (1 if bearish == 9 else bearish + 1), 0
+    if bullish == 9:
+        i = len(bars) - 1
+        perfected = (bars[i].low <= bars[i - 3].low and bars[i].low <= bars[i - 2].low) or (bars[i - 1].low <= bars[i - 3].low and bars[i - 1].low <= bars[i - 2].low)
+        return "CALL", perfected
+    if bearish == 9:
+        i = len(bars) - 1
+        perfected = (bars[i].high >= bars[i - 3].high and bars[i].high >= bars[i - 2].high) or (bars[i - 1].high >= bars[i - 3].high and bars[i - 1].high >= bars[i - 2].high)
+        return "PUT", perfected
+    return "", False
+
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -96,6 +123,9 @@ class ExitConfig:
     spread_trail_multiple: float = 4.0
     peak_profit_giveback_fraction: float = 0.25
     require_price_confirmation_after_proven: bool = False  # see module docstring (b)
+    # Candidate is recorded in observations until bid-level replay can show
+    # whether it improves exits; enable explicitly to send broker exits.
+    reversal_phase_exit: bool = False
     # Reasoned from replaying 39 real closed trades across 2026-09-30 and
     # 2026-10-01 (bleed_out_shadow.py): a never-armed position whose gain
     # already exceeds this loss, regardless of bar-level peak resets, is a
@@ -256,6 +286,17 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
     if (option_quote_fresh and opposite_psar and not config.require_price_confirmation_after_proven
             and pos.armed):
         return ExitDecision(state="EXIT_PENDING", reasons=("OPPOSITE_PSAR_BARE_PROVEN",),
+                             gain_pct=gain, peak_gain_pct=peak)
+
+    # A completed opposing reversal marker, observed after the position opened,
+    # becomes actionable only when a fresh live bid has retreated by at least
+    # the observed option spread. The marker itself never supplies an option
+    # price and cannot trigger from an intrabar or pre-entry signal.
+    reversal_side, _ = completed_reversal_phase(bars) if underlying_fresh else ("", False)
+    if (config.reversal_phase_exit and option_quote_fresh and reversal_side == opposite
+            and bars[-1].ts >= pos.opened_ts and spread > 0
+            and pos.peak_option_price - pos.current_option_price >= spread - eps):
+        return ExitDecision(state="EXIT_PENDING", reasons=("OPPOSITE_REVERSAL_PHASE_BID_WEAK",),
                              gain_pct=gain, peak_gain_pct=peak)
 
     # 4. Thesis broken: structure, momentum, and UW all agree against us.

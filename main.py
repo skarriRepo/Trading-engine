@@ -53,6 +53,7 @@ from trading_engine.tradier_orders import TradierOrderClient, TradierOrderError
 from trading_engine.sandbox_execution import SandboxExecution
 from trading_engine.tradier_client import TradierAuthError
 from trading_engine.runtime import TradingRuntime
+from trading_engine.exit_pipeline import ExitConfig
 from trading_engine.dashboard_store import DashboardStore
 from trading_engine.history_warmup import warmup_symbols
 from trading_engine.audit_log import AuditLog, ET
@@ -71,9 +72,11 @@ def build_runtime() -> tuple:
     if not symbols:
         raise ValueError("WATCH_SYMBOLS needs at least one underlying ticker")
     order_quantity = int(os.environ.get("ORDER_QUANTITY", "1"))
+    reversal_exit_enabled = os.environ.get("REVERSAL_PHASE_EXIT", "false").strip().lower() in {"1", "true", "yes"}
     audit = AuditLog(os.environ.get("ENGINE_LOG_DIR", "logs"))
     audit.emit("ENGINE_START", symbols=symbols, environment=env,
-               orders_enabled=bool(os.environ.get("TRADIER_ACCOUNT_ID", "").strip()))
+               orders_enabled=bool(os.environ.get("TRADIER_ACCOUNT_ID", "").strip()),
+               reversal_phase_exit_enabled=reversal_exit_enabled)
 
     rest_client = TradierRestClient(config=TradierConfig(base_url=base_url))
     live_data_token = os.environ.get("TRADIER_LIVE_DATA_TOKEN", "").strip()
@@ -141,6 +144,7 @@ def build_runtime() -> tuple:
     rt = TradingRuntime(dashboard=dashboard, option_entry_price_provider=option_price_provider,
                         order_executor=executor,
                         audit=audit,
+                        exit_config=ExitConfig(reversal_phase_exit=reversal_exit_enabled),
                         option_quote_recovery=_recover_option_quote if executor else None,
                         option_quote_timeout_sec=float(os.environ.get("OPTION_QUOTE_TIMEOUT_SEC", "20")),
                         max_market_age_sec=10)
