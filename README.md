@@ -512,3 +512,10 @@ It is also disabled by default when no setting exists. Set it to `true` and
 restart to restore the rule. Startup logs record the effective setting.
 Emergency stop, profit giveback, opposing PSAR, perfected reversal,
 price-confirmed UW thesis exit, and end-of-day close remain active.
+
+### Entry confirmation research
+
+See [the sampled entry study](research/ENTRY_CONFIRMATION_REPLAY.md) and
+`replay_entry_confirmation.py`. This is research only; current entries are
+unchanged. It compares live quotes with fixed recorded exits and explicitly
+identifies missing crossings/quotes instead of inventing fills.

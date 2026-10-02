@@ -1,0 +1,864 @@
+{
+  "study": "Sampled next-bar confirmation; same contract and recorded exit trigger bid",
+  "limitations": [
+    "Not a full tick replay: no crossing observed does not prove no crossing occurred.",
+    "Only filled historical trades are studied; blocked/unfilled candidates are excluded.",
+    "Option quotes before the original fill are mostly absent.",
+    "Fixed recorded exits are not recomputed for changed entry time and price.",
+    "No hypothetical fills, fees, portfolio capacity, or missed new trades are modeled."
+  ],
+  "outcomes": {
+    "NO_OBSERVED_CROSSING": 33,
+    "OBSERVED_CONFIRMATION": 16
+  },
+  "baseline_pnl_all": -222.0,
+  "matched_baseline_pnl": -90.0,
+  "matched_confirmation_pnl": -170.0,
+  "no_observed_crossing_baseline_pnl": -132.0,
+  "missed_sampled_crossings_proven_by_ohlc": 9,
+  "details": [
+    {
+      "trade_id": "sx-1455f25b8b01476c996c",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T09:55:59.822606-04:00",
+      "threshold": 342.87,
+      "baseline_live_ask": 1.18,
+      "fixed_exit_bid": 0.77,
+      "baseline_pnl": -41.0,
+      "exit_reason": [
+        "EMERGENCY_OPTION_STOP"
+      ],
+      "observed_price_samples": 2,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-71dd61b41b7b4da9b753",
+      "symbol": "TSLA",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T09:58:20.971272-04:00",
+      "threshold": 368.73,
+      "baseline_live_ask": 2.78,
+      "fixed_exit_bid": 2.07,
+      "baseline_pnl": -71.0,
+      "exit_reason": [
+        "OPPOSITE_PSAR_CONFIRMED_BY_PRICE"
+      ],
+      "observed_price_samples": 2,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-96d4689054344cfead9e",
+      "symbol": "AAPL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T10:00:36.241887-04:00",
+      "threshold": 332.4,
+      "baseline_live_ask": 1.05,
+      "fixed_exit_bid": 1.23,
+      "baseline_pnl": 18.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 3,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-b2c3a6f5588949708caf",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T10:02:29.411187-04:00",
+      "threshold": 518.348,
+      "baseline_live_ask": 2.3,
+      "fixed_exit_bid": 2.01,
+      "baseline_pnl": -29.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 6,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-4f4a574694c0467c9db5",
+      "symbol": "GOOGL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T10:02:30.245384-04:00",
+      "threshold": 344.71,
+      "baseline_live_ask": 1.3,
+      "fixed_exit_bid": 0.96,
+      "baseline_pnl": -34.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 1,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.3,
+      "confirmation_delay_sec": 30.329,
+      "confirmation_underlying": 344.8,
+      "confirmed_pnl": -34.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-f99b6a80b97c485eab8b",
+      "symbol": "AMZN",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T10:06:18.761542-04:00",
+      "threshold": 252.75,
+      "baseline_live_ask": 1.02,
+      "fixed_exit_bid": 1.12,
+      "baseline_pnl": 10.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 7,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-5710e7f5fb06413f985d",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T10:27:59.505149-04:00",
+      "threshold": 344.08,
+      "baseline_live_ask": 1.83,
+      "fixed_exit_bid": 1.46,
+      "baseline_pnl": -37.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 442,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-69d9dcf63ad6499892ce",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T10:32:09.995073-04:00",
+      "threshold": 753.2,
+      "baseline_live_ask": 1.87,
+      "fixed_exit_bid": 1.94,
+      "baseline_pnl": 7.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 39,
+      "outcome": "NO_OBSERVED_CROSSING"
+    },
+    {
+      "trade_id": "sx-162f257d339b4ec2b066",
+      "symbol": "AAPL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T10:34:08.998695-04:00",
+      "threshold": 333.935,
+      "baseline_live_ask": 1.59,
+      "fixed_exit_bid": 1.61,
+      "baseline_pnl": 2.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 23,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-76532503d24d4ccb815c",
+      "symbol": "MSFT",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T10:30:23.259014-04:00",
+      "threshold": 516.58,
+      "baseline_live_ask": 2.13,
+      "fixed_exit_bid": 1.82,
+      "baseline_pnl": -31.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 6,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-a8b6b3f38b054086acfc",
+      "symbol": "GOOGL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T10:38:11.221612-04:00",
+      "threshold": 345.1099,
+      "baseline_live_ask": 1.14,
+      "fixed_exit_bid": 1.22,
+      "baseline_pnl": 8.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 20,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-1cb17b8174014c9f8a04",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T10:45:59.401898-04:00",
+      "threshold": 753.19,
+      "baseline_live_ask": 1.45,
+      "fixed_exit_bid": 1.51,
+      "baseline_pnl": 6.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 373,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-cd6c63479d0a47e4b38a",
+      "symbol": "AAPL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T10:48:09.591681-04:00",
+      "threshold": 333.52,
+      "baseline_live_ask": 0.55,
+      "fixed_exit_bid": 0.53,
+      "baseline_pnl": -2.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 38,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-be7341b1935e47679fd9",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T11:13:59.469354-04:00",
+      "threshold": 343.24,
+      "baseline_live_ask": 0.69,
+      "fixed_exit_bid": 1.12,
+      "baseline_pnl": 43.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 80,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-5fc2780c0725400eb466",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T11:24:02.254367-04:00",
+      "threshold": 515.62,
+      "baseline_live_ask": 1.87,
+      "fixed_exit_bid": 1.55,
+      "baseline_pnl": -32.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 1,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.87,
+      "confirmation_delay_sec": 2.288,
+      "confirmation_underlying": 515.68,
+      "confirmed_pnl": -32.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-826afc3e98444470a745",
+      "symbol": "AAPL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T11:23:59.489804-04:00",
+      "threshold": 331.81,
+      "baseline_live_ask": 0.65,
+      "fixed_exit_bid": 0.77,
+      "baseline_pnl": 12.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 72,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-4cdc32198d314ab7968d",
+      "symbol": "QQQ",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T11:29:59.426554-04:00",
+      "threshold": 749.44,
+      "baseline_live_ask": 1.84,
+      "fixed_exit_bid": 1.96,
+      "baseline_pnl": 12.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 166,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-0f1df9b4366a41ccb2ea",
+      "symbol": "MSFT",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T11:38:10.257972-04:00",
+      "threshold": 514.5,
+      "baseline_live_ask": 1.44,
+      "fixed_exit_bid": 1.24,
+      "baseline_pnl": -20.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 240,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-75a17cf4948d4b008647",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T11:55:59.352556-04:00",
+      "threshold": 749.15,
+      "baseline_live_ask": 1.4,
+      "fixed_exit_bid": 1.49,
+      "baseline_pnl": 9.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 37,
+      "outcome": "NO_OBSERVED_CROSSING"
+    },
+    {
+      "trade_id": "sx-461977c8ecc743ada518",
+      "symbol": "QQQ",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T12:00:00.037435-04:00",
+      "threshold": 750.34,
+      "baseline_live_ask": 1.42,
+      "fixed_exit_bid": 1.51,
+      "baseline_pnl": 9.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 4,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.54,
+      "confirmation_delay_sec": 17.851,
+      "confirmation_underlying": 750.36,
+      "confirmed_pnl": -3.0
+    },
+    {
+      "trade_id": "sx-a2bce977f70c419cb9fb",
+      "symbol": "AAPL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T11:56:04.625153-04:00",
+      "threshold": 332.48,
+      "baseline_live_ask": 0.82,
+      "fixed_exit_bid": 0.9,
+      "baseline_pnl": 8.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 196,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-bdcb0bf145534b8f9372",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T12:02:09.566493-04:00",
+      "threshold": 515.025,
+      "baseline_live_ask": 1.26,
+      "fixed_exit_bid": 1.35,
+      "baseline_pnl": 9.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 18,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.35,
+      "confirmation_delay_sec": 72.564,
+      "confirmation_underlying": 515.05,
+      "confirmed_pnl": 0.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-bc471d1d15ec49e8b263",
+      "symbol": "GOOGL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T12:00:08.254693-04:00",
+      "threshold": 342.7,
+      "baseline_live_ask": 1.08,
+      "fixed_exit_bid": 1.42,
+      "baseline_pnl": 34.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 11,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-e0d09a984ac6478782a5",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T12:23:59.934558-04:00",
+      "threshold": 749.98,
+      "baseline_live_ask": 1.18,
+      "fixed_exit_bid": 1.36,
+      "baseline_pnl": 18.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 134,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.28,
+      "confirmation_delay_sec": 43.619,
+      "confirmation_underlying": 749.96,
+      "confirmed_pnl": 8.0
+    },
+    {
+      "trade_id": "sx-9ca8f9b827214c139e2b",
+      "symbol": "MSFT",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T12:17:59.644272-04:00",
+      "threshold": 514.56,
+      "baseline_live_ask": 1.42,
+      "fixed_exit_bid": 1.57,
+      "baseline_pnl": 15.0,
+      "exit_reason": [
+        "OPPOSITE_PERFECT_REVERSAL"
+      ],
+      "observed_price_samples": 344,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-790aa93eb1864dc49994",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T12:26:05.104393-04:00",
+      "threshold": 343.06,
+      "baseline_live_ask": 0.62,
+      "fixed_exit_bid": 0.42,
+      "baseline_pnl": -20.0,
+      "exit_reason": [
+        "EMERGENCY_OPTION_STOP"
+      ],
+      "observed_price_samples": 24,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.68,
+      "confirmation_delay_sec": 62.389,
+      "confirmation_underlying": 343.02,
+      "confirmed_pnl": -26.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-b18e4f274c7a4dc3bf31",
+      "symbol": "AAPL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T12:24:05.351519-04:00",
+      "threshold": 332.59,
+      "baseline_live_ask": 0.57,
+      "fixed_exit_bid": 0.43,
+      "baseline_pnl": -14.0,
+      "exit_reason": [
+        "OPPOSITE_PSAR_CONFIRMED_BY_PRICE"
+      ],
+      "observed_price_samples": 125,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-1b60eb16149440719940",
+      "symbol": "AAPL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T12:36:16.003371-04:00",
+      "threshold": 333.31,
+      "baseline_live_ask": 1.13,
+      "fixed_exit_bid": 1.37,
+      "baseline_pnl": 24.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 174,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-e86ad1a0f8ed4184b6fb",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T12:42:01.631851-04:00",
+      "threshold": 749.282,
+      "baseline_live_ask": 1.22,
+      "fixed_exit_bid": 0.84,
+      "baseline_pnl": -38.0,
+      "exit_reason": [
+        "EMERGENCY_OPTION_STOP"
+      ],
+      "observed_price_samples": 1,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.22,
+      "confirmation_delay_sec": 2.846,
+      "confirmation_underlying": 749.26,
+      "confirmed_pnl": -38.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-485f448f9f2341debba4",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T12:56:00.171625-04:00",
+      "threshold": 514.37,
+      "baseline_live_ask": 0.81,
+      "fixed_exit_bid": 0.63,
+      "baseline_pnl": -18.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 314,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-af7bf19d00d846c2bf4f",
+      "symbol": "QQQ",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T12:59:59.345560-04:00",
+      "threshold": 749.8499,
+      "baseline_live_ask": 0.84,
+      "fixed_exit_bid": 1.19,
+      "baseline_pnl": 35.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 140,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.98,
+      "confirmation_delay_sec": 46.079,
+      "confirmation_underlying": 749.85,
+      "confirmed_pnl": 21.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-b635722b717c4237af47",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T13:15:59.260701-04:00",
+      "threshold": 748.92,
+      "baseline_live_ask": 0.93,
+      "fixed_exit_bid": 0.65,
+      "baseline_pnl": -28.0,
+      "exit_reason": [
+        "EMERGENCY_OPTION_STOP"
+      ],
+      "observed_price_samples": 361,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-5fb9f35a34b746bfb9af",
+      "symbol": "AAPL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T13:16:04.455540-04:00",
+      "threshold": 333.45,
+      "baseline_live_ask": 0.26,
+      "fixed_exit_bid": 0.23,
+      "baseline_pnl": -3.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 223,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-16164f6d01e246f09695",
+      "symbol": "MSFT",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T13:22:07.282535-04:00",
+      "threshold": 514.54,
+      "baseline_live_ask": 1.33,
+      "fixed_exit_bid": 1.11,
+      "baseline_pnl": -22.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 140,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.36,
+      "confirmation_delay_sec": 84.952,
+      "confirmation_underlying": 514.52,
+      "confirmed_pnl": -25.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-a65bb38cdea94c379f9b",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T13:16:03.306972-04:00",
+      "threshold": 344.19,
+      "baseline_live_ask": 1.23,
+      "fixed_exit_bid": 1.45,
+      "baseline_pnl": 22.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 189,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-1518dac0193e43ebb1ae",
+      "symbol": "GOOGL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T13:48:00.279547-04:00",
+      "threshold": 343.83,
+      "baseline_live_ask": 1.51,
+      "fixed_exit_bid": 1.41,
+      "baseline_pnl": -10.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 91,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.55,
+      "confirmation_delay_sec": 38.224,
+      "confirmation_underlying": 343.895,
+      "confirmed_pnl": -14.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-1ebbd6b12f9644ba8367",
+      "symbol": "AAPL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T13:54:00.285846-04:00",
+      "threshold": 333.68,
+      "baseline_live_ask": 1.35,
+      "fixed_exit_bid": 1.06,
+      "baseline_pnl": -29.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 16,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 1.38,
+      "confirmation_delay_sec": 11.465,
+      "confirmation_underlying": 333.7,
+      "confirmed_pnl": -32.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-412e81e59c3244ca9c8a",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T13:46:04.037529-04:00",
+      "threshold": 514.67,
+      "baseline_live_ask": 0.79,
+      "fixed_exit_bid": 1.06,
+      "baseline_pnl": 27.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 100,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.86,
+      "confirmation_delay_sec": 31.521,
+      "confirmation_underlying": 514.71,
+      "confirmed_pnl": 20.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-d8b208fb257c4228a449",
+      "symbol": "AAPL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T14:00:00.600869-04:00",
+      "threshold": 333.22,
+      "baseline_live_ask": 0.26,
+      "fixed_exit_bid": 0.3,
+      "baseline_pnl": 4.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 442,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-4d8116b6a9e74cacb74b",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T14:10:00.295779-04:00",
+      "threshold": 343.68,
+      "baseline_live_ask": 0.24,
+      "fixed_exit_bid": 0.39,
+      "baseline_pnl": 15.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 4,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.27,
+      "confirmation_delay_sec": 12.606,
+      "confirmation_underlying": 343.615,
+      "confirmed_pnl": 12.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-a8409c299ac7410aaef8",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T14:25:59.983325-04:00",
+      "threshold": 515.25,
+      "baseline_live_ask": 0.94,
+      "fixed_exit_bid": 0.71,
+      "baseline_pnl": -23.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 206,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-dd8bd93ef85847d9a065",
+      "symbol": "QQQ",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T14:34:00.466623-04:00",
+      "threshold": 748.9999,
+      "baseline_live_ask": 0.54,
+      "fixed_exit_bid": 0.6,
+      "baseline_pnl": 6.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 555,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-00bf790d6bf04c689d3b",
+      "symbol": "GOOGL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T14:50:00.127025-04:00",
+      "threshold": 342.91,
+      "baseline_live_ask": 0.39,
+      "fixed_exit_bid": 0.34,
+      "baseline_pnl": -5.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 46,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.38,
+      "confirmation_delay_sec": 14.033,
+      "confirmation_underlying": 342.87,
+      "confirmed_pnl": -4.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-49d9aca49a2e456bb252",
+      "symbol": "AAPL",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T14:55:59.103792-04:00",
+      "threshold": 333.5796,
+      "baseline_live_ask": 0.12,
+      "fixed_exit_bid": 0.1,
+      "baseline_pnl": -2.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 394,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-043b1a46c41d4e36b964",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T14:59:59.496625-04:00",
+      "threshold": 515.34,
+      "baseline_live_ask": 0.85,
+      "fixed_exit_bid": 0.66,
+      "baseline_pnl": -19.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 378,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-2b36f566b3e649448692",
+      "symbol": "QQQ",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T15:08:00.261028-04:00",
+      "threshold": 748.7332,
+      "baseline_live_ask": 0.65,
+      "fixed_exit_bid": 0.7,
+      "baseline_pnl": 5.0,
+      "exit_reason": [
+        "PROFIT_GIVEBACK_EXIT"
+      ],
+      "observed_price_samples": 11,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.73,
+      "confirmation_delay_sec": 18.187,
+      "confirmation_underlying": 748.66,
+      "confirmed_pnl": -3.0
+    },
+    {
+      "trade_id": "sx-9bbe14a4cf3943c48f89",
+      "symbol": "MSFT",
+      "direction": "PUT",
+      "signal_time": "2026-10-02T15:06:00.454607-04:00",
+      "threshold": 514.76,
+      "baseline_live_ask": 0.8,
+      "fixed_exit_bid": 0.62,
+      "baseline_pnl": -18.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 99,
+      "outcome": "OBSERVED_CONFIRMATION",
+      "confirmed_ask": 0.82,
+      "confirmation_delay_sec": 45.456,
+      "confirmation_underlying": 514.75,
+      "confirmed_pnl": -20.0,
+      "next_bar_ohlc_crossing": true
+    },
+    {
+      "trade_id": "sx-fa89ef0dd2c64dd48241",
+      "symbol": "MSFT",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T15:20:02.078294-04:00",
+      "threshold": 515.3,
+      "baseline_live_ask": 0.68,
+      "fixed_exit_bid": 0.45,
+      "baseline_pnl": -23.0,
+      "exit_reason": [
+        "EMERGENCY_OPTION_STOP"
+      ],
+      "observed_price_samples": 342,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    },
+    {
+      "trade_id": "sx-1eeb576af7f143ca91a4",
+      "symbol": "GOOGL",
+      "direction": "CALL",
+      "signal_time": "2026-10-02T15:19:59.350904-04:00",
+      "threshold": 343.0201,
+      "baseline_live_ask": 0.72,
+      "fixed_exit_bid": 0.61,
+      "baseline_pnl": -11.0,
+      "exit_reason": [
+        "STALL_EXIT"
+      ],
+      "observed_price_samples": 340,
+      "outcome": "NO_OBSERVED_CROSSING",
+      "next_bar_ohlc_crossing": false
+    }
+  ]
+}
