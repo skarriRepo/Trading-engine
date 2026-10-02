@@ -40,6 +40,16 @@ class TestPerFeedFreshness(unittest.TestCase):
         # The one genuinely fresh feed is still usable on its own.
         self.assertEqual(snap.market_tide_direction, "CALL")
 
+    def test_delayed_trade_does_not_rewind_price_or_psar_candles(self):
+        stream = SymbolStream('MSFT', bar_seconds=120)
+        stream.ingest_tick(1200, 515.0)
+        stream.ingest_tick(1320, 516.0)
+        stream.ingest_tick(1250, 514.0)
+        snap = stream.snapshot(now=1320)
+        self.assertEqual([b.ts for b in snap.bars], [1200, 1320])
+        self.assertEqual(snap.bars[0].low, 515.0)
+        self.assertEqual(snap.price, 516.0)
+
     def test_never_seen_feed_is_not_ready_not_neutral(self):
         stream = SymbolStream('TEST')
         snap = stream.snapshot(now=1_000_000.0)

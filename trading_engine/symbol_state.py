@@ -356,8 +356,14 @@ class SymbolStream:
         if price <= 0:
             return
         with self._lock:
-            self._last_price = (ts, price)
+            # A delayed trade must never replace the current quote or append an
+            # older bucket after a completed candle. Both corrupt PSAR history.
+            if self._last_price is not None and ts < self._last_price[0]:
+                return
             bucket_ts = int(ts // self.bar_seconds) * self.bar_seconds
+            if self._bars and bucket_ts < self._bars[-1].ts:
+                return
+            self._last_price = (ts, price)
             if self._bars and self._bars[-1].ts == bucket_ts:
                 b = self._bars[-1]
                 b.high = max(b.high, price)

@@ -518,8 +518,7 @@ class TradingRuntime:
             if eod_only and "EOD_FORCE_CLOSE" not in decision.reasons:
                 return
             if self.audit:
-                bar_seconds = snap.bars[-1].ts-snap.bars[-2].ts if len(snap.bars) >= 2 else 120.
-                closed = completed_bars(snap.bars, bar_seconds, now)
+                closed = completed_bars(snap.bars, self.bar_seconds, now)
                 bar_ts = closed[-1].ts if closed else None
                 wall = time.time()
                 if (observation_source == "OPTION_QUOTE" or decision.state == "EXIT_PENDING"
@@ -614,16 +613,34 @@ class TradingRuntime:
         if snap.price_state != "FRESH" or snap.bar_state != "FRESH":
             return
 
-        bar_seconds = (snap.bars[-1].ts - snap.bars[-2].ts) if len(snap.bars) >= 2 else 120.0
-        closed_bars = completed_bars(snap.bars, bar_seconds=bar_seconds, now=now)
+        closed_bars = completed_bars(snap.bars, bar_seconds=self.bar_seconds, now=now)
         flip = latest_psar_flip(closed_bars, self.entry_config.psar)
         flip_key = (closed_bars[-1].ts, flip.direction) if flip else None
         if flip is None:
             self.dashboard.record_scan(snap, None, now=now)
             return
-        if self._processed_flip.get(symbol) == flip_key:
+        previous_flip = self._processed_flip.get(symbol)
+        if previous_flip == flip_key:
             self.dashboard.record_scan(snap, None, now=now)
             return
+        if previous_flip and previous_flip[1] == flip.direction:
+            # A PSAR trend cannot flip twice into the same direction. A
+            # recalculated history can report a later bar as another flip;
+            # suppress it until a genuine opposite-direction flip occurs.
+            if self.audit:
+                self.audit.emit("PSAR_HISTORY_DIVERGENCE", symbol=symbol,
+                                market_ts=now, previous_bar_ts=previous_flip[0],
+                                candidate_bar_ts=flip.ts, direction=flip.direction,
+                                reason="CONSECUTIVE_SAME_DIRECTION_FLIP")
+            self.dashboard.record_scan(snap, None, now=now)
+            return
+        if self.audit:
+            self.audit.emit("PSAR_FLIP_DETAILS", symbol=symbol, market_ts=now,
+                            bar_ts=flip.ts, direction=flip.direction, sar=flip.sar,
+                            bar_count=len(closed_bars),
+                            recent_bars=[vars(bar).copy() for bar in closed_bars[-3:]],
+                            parameters=vars(self.entry_config.psar).copy(),
+                            previous_flip=previous_flip)
         self._processed_flip[symbol] = flip_key
 
         decision = evaluate_entry(snap, flip.direction, now=now, config=self.entry_config)
