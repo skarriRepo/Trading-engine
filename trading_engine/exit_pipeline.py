@@ -123,9 +123,7 @@ class ExitConfig:
     spread_trail_multiple: float = 4.0
     peak_profit_giveback_fraction: float = 0.25
     require_price_confirmation_after_proven: bool = False  # see module docstring (b)
-    # Candidate is recorded in observations until bid-level replay can show
-    # whether it improves exits; enable explicitly to send broker exits.
-    reversal_phase_exit: bool = False
+    reversal_phase_exit: bool = True
     # Reasoned from replaying 39 real closed trades across 2026-09-30 and
     # 2026-10-01 (bleed_out_shadow.py): a never-armed position whose gain
     # already exceeds this loss, regardless of bar-level peak resets, is a
@@ -274,6 +272,16 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
             pos.peak_option_price >= pos.entry_option_price + arm_gain - eps):
         pos.armed = True
 
+    # The chart's perfected opposing P is actionable at the close of its bar.
+    # A red P exits a CALL; a green P exits a PUT. The live bid must be fresh
+    # and positive for a broker sell, but a giveback threshold is not required.
+    reversal_side, perfected = completed_reversal_phase(bars) if underlying_fresh else ("", False)
+    if (config.reversal_phase_exit and option_quote_fresh and pos.current_option_price > 0
+            and perfected and reversal_side == opposite
+            and bars[-1].ts >= pos.opened_ts):
+        return ExitDecision(state="EXIT_PENDING", reasons=("OPPOSITE_PERFECT_REVERSAL",),
+                             gain_pct=gain, peak_gain_pct=peak)
+
     # 3. Opposite PSAR, confirmed by price action -- the validated mechanism.
     if opposite_psar and (structure_broken or opposite_momentum):
         return ExitDecision(state="EXIT_PENDING", reasons=("OPPOSITE_PSAR_CONFIRMED_BY_PRICE",),
@@ -286,17 +294,6 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
     if (option_quote_fresh and opposite_psar and not config.require_price_confirmation_after_proven
             and pos.armed):
         return ExitDecision(state="EXIT_PENDING", reasons=("OPPOSITE_PSAR_BARE_PROVEN",),
-                             gain_pct=gain, peak_gain_pct=peak)
-
-    # A completed opposing reversal marker, observed after the position opened,
-    # becomes actionable only when a fresh live bid has retreated by at least
-    # the observed option spread. The marker itself never supplies an option
-    # price and cannot trigger from an intrabar or pre-entry signal.
-    reversal_side, _ = completed_reversal_phase(bars) if underlying_fresh else ("", False)
-    if (config.reversal_phase_exit and option_quote_fresh and reversal_side == opposite
-            and bars[-1].ts >= pos.opened_ts and spread > 0
-            and pos.peak_option_price - pos.current_option_price >= spread - eps):
-        return ExitDecision(state="EXIT_PENDING", reasons=("OPPOSITE_REVERSAL_PHASE_BID_WEAK",),
                              gain_pct=gain, peak_gain_pct=peak)
 
     # 4. Thesis broken: structure, momentum, and UW all agree against us.

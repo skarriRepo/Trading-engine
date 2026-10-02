@@ -86,19 +86,18 @@ filter) and implements `TradingRuntime.option_entry_price_provider`.
 ### Reversal marker exit candidate
 
 The engine computes the chart's bullish/bearish 9-count momentum phase from
-**completed underlying bars**. An opposing phase on a bar that began after
-entry can request an exit only when a fresh live option bid has retreated by
-at least the observed bid/ask spread from its live bid peak. The perfected
-`P` flag is logged separately but is not required. The event is called
-`OPPOSITE_REVERSAL_PHASE_BID_WEAK`; PSAR and emergency exits retain priority.
+**completed underlying bars**. A perfected red `P` on a bar after entry exits
+a CALL; a perfected green `P` exits a PUT. A fresh positive live option bid
+is required to submit the sandbox sell. Plain markers, old markers and
+intrabar markers cannot trigger it. The exit reason is
+`OPPOSITE_PERFECT_REVERSAL`; emergency and EOD exits have higher priority.
 
-This rule defaults to observation only: `POSITION_OBSERVATION` records
+This rule is enabled by default. Set `REVERSAL_PHASE_EXIT=false` in `.env`
+to disable it. `POSITION_OBSERVATION` records
 `reversal_phase_side`, `reversal_phase_perfected`,
 `reversal_phase_opposes_position`, `reversal_bid_retreat`, and
-`reversal_bid_confirmation`. The available candle replay does not contain
-contemporaneous option bids for these markers, so it cannot validate an
-executable exit or its P&L. Set `REVERSAL_PHASE_EXIT=true` in `.env` to let a
-confirmed candidate request a sandbox exit after reviewing bid-level replay.
+`reversal_perfect_exit_candidate`. The available candle replay does not
+contain contemporaneous option bids, so it cannot estimate the P&L impact.
 | `trading_engine/contract_selection.py` | `select_contract`, `make_option_entry_price_provider` — turns an option chain into a real, ask-priced entry. |
 | `trading_engine/tradier_client.py` | Tradier REST client — quotes, time-and-sales, expirations, option chains. Sandbox token from `TRADIER_ACCESS_TOKEN`; a separate production market-data client can use `TRADIER_LIVE_DATA_TOKEN`. |
 | `trading_engine/history_warmup.py` | One-time intraday 1-minute time-and-sales fetch; aggregates complete contiguous 2-minute OHLCV bars for PSAR and momentum without replaying historical entries. |

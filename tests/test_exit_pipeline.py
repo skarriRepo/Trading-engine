@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import unittest
 
-from trading_engine.symbol_state import SymbolStream, GexSample
+from trading_engine.symbol_state import Bar, SymbolStream, GexSample
 from trading_engine.exit_pipeline import (
     PositionState, ExitConfig, evaluate_exit, completed_reversal_phase,
 )
@@ -86,29 +86,42 @@ class TestEpsilonTolerance(unittest.TestCase):
 
 
 class TestReversalPhaseExit(unittest.TestCase):
-    def test_latest_completed_bullish_phase_and_live_bid_weakness(self):
-        closes = [120 - i for i in range(13)]
-        snap, now = make_snapshot(closes)
-        self.assertEqual(completed_reversal_phase(snap.bars)[0], 'CALL')
-        pos = PositionState(symbol='TEST', direction='PUT', opened_ts=snap.bars[5].ts,
+    def test_green_p_exits_put_and_red_p_exits_call(self):
+        for closes, held, marker in [([120 - i for i in range(13)], 'PUT', 'CALL'),
+                                      ([100 + i for i in range(13)], 'CALL', 'PUT')]:
+            with self.subTest(held=held):
+                snap, now = make_snapshot(closes)
+                self.assertEqual(completed_reversal_phase(snap.bars), (marker, True))
+                pos = PositionState(symbol='TEST', direction=held, opened_ts=snap.bars[5].ts,
+                                    entry_option_price=1.0)
+                pos.update_price(1.27, now, ask=1.29)
+                decision = evaluate_exit(snap, pos, now=now)
+                self.assertEqual(decision.reasons, ('OPPOSITE_PERFECT_REVERSAL',))
+                # Neither bid giveback nor PSAR confirmation is necessary.
+                self.assertEqual(pos.peak_option_price, pos.current_option_price)
+                with patch('trading_engine.exit_pipeline.compute_psar', return_value=()):
+                    self.assertNotEqual(evaluate_exit(snap, pos, now=now,
+                                        option_quote_fresh=False).state, 'EXIT_PENDING')
+                    pos.opened_ts = snap.bars[-1].ts + 1
+                    self.assertNotEqual(evaluate_exit(snap, pos, now=now).state, 'EXIT_PENDING')
+                    pos.opened_ts = snap.bars[5].ts
+                    self.assertNotEqual(evaluate_exit(snap, pos, now=now,
+                                        config=ExitConfig(reversal_phase_exit=False)).state, 'EXIT_PENDING')
+
+    def test_plain_marker_does_not_exit(self):
+        snap, now = make_snapshot([120 - i for i in range(13)])
+        bars = list(snap.bars)
+        for i in (-3, -4):
+            old = bars[i]
+            bars[i] = Bar(ts=old.ts, open=old.open, high=old.high,
+                          low=90, close=old.close, volume=old.volume)
+        snap = snap.__class__(**{**snap.__dict__, 'bars': tuple(bars)})
+        self.assertEqual(completed_reversal_phase(snap.bars), ('CALL', False))
+        pos = PositionState(symbol='TEST', direction='PUT', opened_ts=bars[5].ts,
                             entry_option_price=1.0)
-        pos.update_price(1.30, now - 180, ask=1.32)
-        pos.update_price(1.27, now, ask=1.29)
-        # Isolate the new trigger from the existing PSAR exit.
+        pos.update_price(1.0, now, ask=1.02)
         with patch('trading_engine.exit_pipeline.compute_psar', return_value=()):
-            enabled = ExitConfig(reversal_phase_exit=True)
-            decision = evaluate_exit(snap, pos, now=now, config=enabled)
-            self.assertEqual(decision.reasons, ('OPPOSITE_REVERSAL_PHASE_BID_WEAK',))
-            self.assertNotEqual(evaluate_exit(snap, pos, now=now, config=enabled, option_quote_fresh=False).state,
-                                'EXIT_PENDING')
-            pos.current_option_price = 1.295
-            self.assertNotEqual(evaluate_exit(snap, pos, now=now, config=enabled).state, 'EXIT_PENDING')
-            pos.current_option_price = 1.27
-            pos.opened_ts = snap.bars[-1].ts + 1
-            self.assertNotEqual(evaluate_exit(snap, pos, now=now, config=enabled).state, 'EXIT_PENDING')
-            pos.opened_ts = snap.bars[5].ts
-            self.assertNotEqual(evaluate_exit(snap, pos, now=now,
-                                config=ExitConfig(reversal_phase_exit=False)).state, 'EXIT_PENDING')
+            self.assertNotEqual(evaluate_exit(snap, pos, now=now).state, 'EXIT_PENDING')
 
     def test_old_phase_does_not_keep_firing(self):
         snap, _ = make_snapshot([120 - i for i in range(13)] + [110])

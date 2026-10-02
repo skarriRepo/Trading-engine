@@ -72,7 +72,7 @@ def build_runtime() -> tuple:
     if not symbols:
         raise ValueError("WATCH_SYMBOLS needs at least one underlying ticker")
     order_quantity = int(os.environ.get("ORDER_QUANTITY", "1"))
-    reversal_exit_enabled = os.environ.get("REVERSAL_PHASE_EXIT", "false").strip().lower() in {"1", "true", "yes"}
+    reversal_exit_enabled = os.environ.get("REVERSAL_PHASE_EXIT", "true").strip().lower() in {"1", "true", "yes"}
     audit = AuditLog(os.environ.get("ENGINE_LOG_DIR", "logs"))
     audit.emit("ENGINE_START", symbols=symbols, environment=env,
                orders_enabled=bool(os.environ.get("TRADIER_ACCOUNT_ID", "").strip()),

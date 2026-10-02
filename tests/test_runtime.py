@@ -51,7 +51,8 @@ class TestPositionOpeningRequiresAPriceProvider(unittest.TestCase):
         self.assertFalse(hasattr(rt, 'deferred'))
 
     def test_take_with_a_working_price_provider_opens_a_real_position(self):
-        rt = TradingRuntime(option_entry_price_provider=lambda sym, d, now, u: OptionEntryResult(price=1.25, occ_symbol=f'{sym}-TEST'))
+        rt = TradingRuntime(option_entry_price_provider=lambda sym, d, now, u: OptionEntryResult(price=1.25, occ_symbol=f'{sym}-TEST'),
+                            exit_config=ExitConfig(reversal_phase_exit=False))
         closes = uptrend_with_a_genuine_flip()
         feed_uptrend(rt, 'AAPL', closes)
         self.assertEqual(len(rt.positions), 1)
@@ -79,7 +80,8 @@ class TestCallbacks(unittest.TestCase):
     def test_on_trade_closed_fires_when_the_ladder_exits(self):
         closed = []
         rt = TradingRuntime(option_entry_price_provider=lambda sym, d, now, u: OptionEntryResult(price=1.0, occ_symbol=f'{sym}-TEST'),
-                             on_trade_closed=lambda tid, pos: closed.append(tid))
+                             on_trade_closed=lambda tid, pos: closed.append(tid),
+                             exit_config=ExitConfig(reversal_phase_exit=False))
         closes = uptrend_with_a_genuine_flip()
         last_ts = feed_uptrend(rt, 'AAPL', closes)
         self.assertEqual(len(rt.positions), 1)

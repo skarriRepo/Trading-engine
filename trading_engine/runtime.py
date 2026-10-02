@@ -162,8 +162,8 @@ class TradingRuntime:
                     reversal_phase_perfected=reversal_perfected,
                     reversal_phase_opposes_position=reversal_opposes,
                     reversal_bid_retreat=round(giveback, 4),
-                    reversal_bid_confirmation=bool(reversal_opposes and quote_fresh and
-                                                   spread > 0 and giveback >= spread-self.exit_config.epsilon),
+                    reversal_perfect_exit_candidate=bool(reversal_opposes and reversal_perfected and
+                                                         quote_fresh and pos.current_option_price > 0),
                     psar_direction=psar[-1].direction if psar else None,
                     structure=structure_from_bars(bars) if bars else "MIXED",
                     momentum=momentum_from_bars(bars) if bars else "NOT_READY",
