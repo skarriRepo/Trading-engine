@@ -132,13 +132,10 @@ and in the code, not presented with false confidence.
   forward-return quality (52.4% favorable) of every combination tried,
   including several deliberately quieter-looking ones that tested worse.
 
-- **UW confluence requires ≥4 of 5 overlapping readings agreeing with zero
-  disagreement**, not a simple majority. A straight port of the old
-  majority-vote logic was replayed against a real trading day and agreed
-  with a separately-validated legacy computation on only 27.8% of the cases
-  where it fired, including direct directional contradictions on the same
-  symbol at the same moment. The stricter rule here defaults to "no clear
-  read" rather than guessing whenever agreement isn't overwhelming.
+- **UW confluence counts net flow and sustained interval pressure as two
+  feed families.** Overlapping net-flow horizons never count as separate
+  votes. A fresh opposing market tide vetoes confirmation. UW remains an
+  observation for entry and requires price confirmation for a thesis exit.
 
 - **Per-feed freshness, never a single global "is this fresh" flag.** One
   live feed must never mask another stale one sitting behind it — this
@@ -352,9 +349,8 @@ pytest tests/ -q
 uvicorn dashboard_app:app --reload --port 8000
 
 # The real thing -- needs a Tradier token:
-cp .env.example .env
-# edit .env: set TRADIER_ACCESS_TOKEN (sandbox token first), leave
-# TRADIER_ENV=sandbox
+# .env settings are included. Save sandbox/live tokens and account ID
+# in your private credentials.env; keep TRADIER_ENV=sandbox
 python main.py
 # open http://localhost:8000 -- watch the Scan tab for real ticks arriving
 ```
@@ -390,7 +386,7 @@ sandbox-only.
 
 **Tradier: done, needs a live smoke test.** `main.py` already loads
 `TRADIER_ACCESS_TOKEN` from the environment (never hardcode it — see
-`.env.example`), builds a real `TradierRestClient` and the appropriate
+`.env`), builds a real `TradierRestClient` and the appropriate
 transport (see above), and wires both into a `TradingRuntime` and the
 dashboard. Run it against `TRADIER_ENV=sandbox` first and confirm quotes
 show up on the Scan tab before ever pointing it at production.
@@ -425,7 +421,7 @@ broker position reduction. New entries are limited to weekdays 09:30–15:30
 ET. No order is inferred from a price trigger alone.
 
 The default entry limit is at most 5% over the selected ask. A single order
-may debit at most $300, total open/pending debit at most $600, and new entries
+may debit at most $6,000, total open/pending debit at most $6,000 with the included settings, and new entries
 pause once the daily live quote loss measure reaches -$500 for the ET day. Change these
 in `.env` to match the sandbox account. An unfilled entry limit requests
 cancellation once after 45 seconds; it stays pending until the broker confirms
@@ -488,3 +484,23 @@ and sandbox preview/submission still run synchronously there.
 Without `TRADIER_ACCOUNT_ID`, trades stay internal simulations. Production
 account IDs are refused by `main.py`; this bundle has not placed an order
 against a credentialed Tradier sandbox account in this environment.
+
+### UW confirmation and checkout settings
+
+The repository now includes a non-secret `.env`; `.env.example` is removed.
+It sets MAX_ORDER_DEBIT=6000 and MAX_TOTAL_DEBIT=6000. Tokens and account IDs
+remain in your private credentials file. Process environment values override
+the checkout settings. Restart after changing settings. Do not add credentials
+to the tracked `.env`.
+
+UW confluence counts two feed families: net flow and interval aggressor flow.
+The net-flow family requires 1m/3m/5m agreement and at least five minutes of
+received history. The interval family requires 30 seconds of consistent
+pressure with at least 20% imbalance and no update gap exceeding its feed TTL.
+These are starting confirmation criteria, not replay-validated thresholds.
+A fresh opposing market tide vetoes confirmation without adding a vote.
+PSAR entries remain unblocked by UW. Existing price-confirmed UW thesis exits
+use this stricter confirmation and require a fresh live bid to fall at least
+one current spread from its observed peak; no flow-only exit is added.
+Contract-level opening-flow classification is not available from these ticker
+rollups and is not inferred.

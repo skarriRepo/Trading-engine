@@ -181,6 +181,9 @@ class SymbolSnapshot:
     put_wall: Optional[float]
     target_candidates: Tuple[float, ...]
     gex_state: str
+    # Confirmation uses elapsed history, never four votes from one stream.
+    net_flow_coverage_sec: float = 0.0
+    aggressor_confirmed_direction: str = "NOT_READY"
 
     @staticmethod
     def build(symbol: str, now: float, ttl: FeedTTL, connected: bool,
@@ -294,6 +297,33 @@ class SymbolSnapshot:
                 target_candidates = tuple(gex.target_candidates)
                 gex_state = FreshnessState.FRESH
 
+        coverage = (max(s.ts for s in net_flow) - min(s.ts for s in net_flow)
+                    if net_flow_state == FreshnessState.FRESH else 0.0)
+        confirmed = "NOT_READY"
+        if interval_flow_state == FreshnessState.FRESH:
+            # These are overlapping interval snapshots: inspect persistence,
+            # do not sum the same contract volume repeatedly.
+            samples = sorted({s.ts: s for s in interval_flow}.values(), key=lambda s: s.ts)
+            cutoff = samples[-1].ts - 30.0
+            anchor = next((i for i in range(len(samples) - 1, -1, -1)
+                           if samples[i].ts <= cutoff), None)
+            if anchor is not None:
+                recent_samples = samples[anchor:]
+                directions = []
+                for sample in recent_samples:
+                    signed = (sample.call_vol_ask_side - sample.call_vol_bid_side
+                              + sample.put_vol_bid_side - sample.put_vol_ask_side)
+                    gross = (abs(sample.call_vol_ask_side) + abs(sample.call_vol_bid_side)
+                             + abs(sample.put_vol_bid_side) + abs(sample.put_vol_ask_side))
+                    directions.append(_dir_from_signed(signed) if gross and abs(signed) / gross >= .20
+                                      else "NEUTRAL")
+                contiguous = all(b.ts - a.ts <= ttl.interval_flow
+                                 for a, b in zip(recent_samples, recent_samples[1:]))
+                if contiguous and len(set(directions)) == 1 and directions[0] in ("CALL", "PUT"):
+                    confirmed = directions[0]
+                else:
+                    confirmed = "NEUTRAL"
+
         return SymbolSnapshot(
             symbol=symbol, now=now, connected=connected,
             price=price, price_state=price_state,
@@ -307,6 +337,7 @@ class SymbolSnapshot:
             market_tide_direction=market_tide_direction, market_tide_state=market_tide_state,
             gamma_path=gamma_path, call_wall=call_wall, put_wall=put_wall,
             target_candidates=target_candidates, gex_state=gex_state,
+            net_flow_coverage_sec=coverage, aggressor_confirmed_direction=confirmed,
         )
 
 

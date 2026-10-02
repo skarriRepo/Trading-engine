@@ -35,6 +35,21 @@ def make_snapshot(closes, direction='CALL', bar_seconds=120.0, now_offset=0.0, u
 
 
 class TestPriorityOrdering(unittest.TestCase):
+    def test_uw_thesis_exit_requires_a_fresh_weakening_live_bid(self):
+        from trading_engine.entry_pipeline import UWConfluenceRead
+        snap, now = make_snapshot([100] * 12)
+        config = ExitConfig(reversal_phase_exit=False)
+        with patch('trading_engine.exit_pipeline.compute_psar', return_value=()), \
+             patch('trading_engine.exit_pipeline.structure_from_bars', return_value='LH/LL'), \
+             patch('trading_engine.exit_pipeline.momentum_from_bars', return_value='BEAR_EXPANDING'), \
+             patch('trading_engine.exit_pipeline.uw_confluence', return_value=UWConfluenceRead(True, False, True, 2, 2)):
+            for fresh, bid, expected in ((True, 1.0, False), (False, .90, False), (True, .90, True)):
+                pos = PositionState(symbol='TEST', direction='CALL', opened_ts=now,
+                                    entry_option_price=1.0, current_option_price=bid,
+                                    peak_option_price=1.0, last_quote_spread=.05)
+                result = evaluate_exit(snap, pos, now=now, config=config, option_quote_fresh=fresh)
+                self.assertEqual('THESIS_BROKEN_PRICE_FLOW' in result.reasons, expected)
+
     def test_eod_beats_everything_including_emergency_stop(self):
         closes = [100 - i for i in range(15)]  # a clear downtrend -> would also hit emergency
         snap, base_now = make_snapshot(closes, direction='CALL')

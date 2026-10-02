@@ -289,7 +289,9 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
                              gain_pct=gain, peak_gain_pct=peak)
 
     # 4. Thesis broken: structure, momentum, and UW all agree against us.
-    if structure_broken and opposite_momentum and uw.supports:
+    bid_weakening = (option_quote_fresh and spread > 0
+                     and pos.peak_option_price - pos.current_option_price >= spread - eps)
+    if underlying_fresh and structure_broken and opposite_momentum and uw.supports and bid_weakening:
         return ExitDecision(state="EXIT_PENDING", reasons=("THESIS_BROKEN_PRICE_FLOW",),
                              gain_pct=gain, peak_gain_pct=peak)
 

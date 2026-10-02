@@ -94,48 +94,56 @@ class TestMomentum(unittest.TestCase):
 
 
 class TestUWConfluence(unittest.TestCase):
-    """The deliberately conservative rule -- must require strong, broad
-    agreement, and must never guess when evidence is thin."""
-
-    def test_full_five_of_five_agreement_supports(self):
-        snap = _snap_with_flows("CALL", "CALL", "CALL", "CALL", "CALL")
-        r = uw_confluence(snap, "CALL")
-        self.assertTrue(r.supports)
-        self.assertFalse(r.opposes)
-
-    def test_four_of_five_with_zero_disagreement_still_supports(self):
+    def test_overlapping_net_windows_alone_never_confirm(self):
         snap = _snap_with_flows("CALL", "CALL", "CALL", "CALL", "NEUTRAL")
         r = uw_confluence(snap, "CALL")
-        self.assertTrue(r.supports)
-
-    def test_four_agree_but_one_disagrees_does_not_support(self):
-        # Stricter than a simple majority: any outright disagreement blocks
-        # `supports`, even with 4 agreeing.
-        snap = _snap_with_flows("CALL", "CALL", "CALL", "CALL", "PUT")
-        r = uw_confluence(snap, "CALL")
         self.assertFalse(r.supports)
-        self.assertFalse(r.opposes)
-
-    def test_only_three_of_five_agree_is_no_clear_read_not_a_guess(self):
-        snap = _snap_with_flows("CALL", "CALL", "CALL", "PUT", "NEUTRAL")
-        r = uw_confluence(snap, "CALL")
-        self.assertFalse(r.supports)
-        self.assertFalse(r.opposes)
-        self.assertTrue(r.ready)  # there IS evidence, it's just not decisive
-
-    def test_fewer_than_three_usable_signals_is_not_ready(self):
-        snap = _snap_with_flows("NOT_READY", "NOT_READY", "NOT_READY", "CALL", "CALL")
-        r = uw_confluence(snap, "CALL")
         self.assertFalse(r.ready)
+        self.assertEqual(r.agreeing_signals, 1)
+        self.assertEqual(r.total_signals, 2)
+
+    def test_two_confirmed_feed_families_support(self):
+        r = uw_confluence(_snap_with_flows("PUT", "CALL", "CALL", "CALL", "CALL"), "CALL")
+        self.assertTrue(r.supports)  # a 30-second net-flow wobble is not another vote
+        self.assertEqual(r.agreeing_signals, 2)
+
+    def test_mixed_horizons_do_not_confirm(self):
+        r = uw_confluence(_snap_with_flows("CALL", "CALL", "CALL", "PUT", "CALL"), "CALL")
         self.assertFalse(r.supports)
+
+    def test_instant_aggressor_flip_does_not_override_confirmed_direction(self):
+        snap = _snap_with_flows("PUT", "PUT", "PUT", "PUT", "CALL")
+        r = uw_confluence(snap, "CALL")
+        self.assertFalse(r.supports)
+        self.assertFalse(r.opposes)
+
+    def test_partial_history_cannot_pretend_to_be_five_minutes(self):
+        snap = _snap_with_flows("CALL", "CALL", "CALL", "CALL", "CALL")
+        snap = snap.__class__(**{**snap.__dict__, "net_flow_coverage_sec": 15})
+        self.assertFalse(uw_confluence(snap, "CALL").supports)
+
+    def test_stale_interval_cannot_confirm(self):
+        snap = _snap_with_flows("CALL", "CALL", "CALL", "CALL", "CALL")
+        snap = snap.__class__(**{**snap.__dict__, "interval_flow_state": "STALE"})
+        self.assertFalse(uw_confluence(snap, "CALL").supports)
+
+    def test_fresh_opposing_tide_vetoes_but_is_not_a_vote(self):
+        snap = _snap_with_flows("CALL", "CALL", "CALL", "CALL", "CALL")
+        snap = snap.__class__(**{**snap.__dict__, "market_tide_state": "FRESH",
+                               "market_tide_direction": "PUT"})
+        r = uw_confluence(snap, "CALL")
+        self.assertFalse(r.supports)
+        self.assertEqual(r.total_signals, 2)
 
 
 def _snap_with_flows(f30, f1m, f3m, f5m, aggr):
-    stream = SymbolStream('TEST')
-    snap = stream.snapshot(now=1000.0)
+    snap = SymbolStream('TEST').snapshot(now=1000.0)
     return snap.__class__(
         **{**snap.__dict__, 'flow_30s': f30, 'flow_1m': f1m, 'flow_3m': f3m,
-           'flow_5m': f5m, 'aggressor_direction': aggr}
+           'flow_5m': f5m, 'aggressor_direction': aggr,
+           'aggressor_confirmed_direction': aggr,
+           'net_flow_state': 'FRESH', 'interval_flow_state': 'FRESH',
+           'net_flow_coverage_sec': 300}
     )
 
 
@@ -229,9 +237,11 @@ class TestEvaluateEntry(unittest.TestCase):
         self.assertEqual(decision.action, "TAKE")
         self.assertFalse(hasattr(decision, "structure"))
 
-    def test_uw_strong_opposition_skips_even_with_good_structure(self):
+    def test_confirmed_uw_opposition_is_observation_not_entry_blocker(self):
         snap, now = self._healthy_uptrend_snapshot(extra_flows={
             'flow_30s': 'PUT', 'flow_1m': 'PUT', 'flow_3m': 'PUT', 'flow_5m': 'PUT', 'aggressor_direction': 'PUT',
+            'net_flow_state': 'FRESH', 'interval_flow_state': 'FRESH',
+            'net_flow_coverage_sec': 300, 'aggressor_confirmed_direction': 'PUT',
         })
         decision = evaluate_entry(snap, "CALL", now=now)
         self.assertEqual(decision.action, "TAKE")

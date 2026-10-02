@@ -68,7 +68,7 @@ class TradierOrderClient:
         if not account_id:
             raise TradierOrderError(
                 "TRADIER_ACCOUNT_ID is not set. Set it as an environment variable "
-                "(see .env.example) -- order placement refuses to guess an account."
+                "(see README.md for the private credentials file) -- order placement refuses to guess an account."
             )
         self.rest_client = rest_client
         self.account_id = account_id

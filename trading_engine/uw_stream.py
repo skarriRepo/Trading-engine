@@ -55,7 +55,7 @@ def _load_uw_key(explicit_key: Optional[str] = None) -> str:
     if not key:
         raise UWAuthError(
             "UW_API_KEY is not set. Set it as an environment variable "
-            "(see .env.example) -- this client never accepts a key as a "
+            "(see README.md for the private credentials file) -- this client never accepts a key as a "
             "literal in code."
         )
     return key

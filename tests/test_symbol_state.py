@@ -82,6 +82,30 @@ class TestPerFeedFreshness(unittest.TestCase):
 
 
 class TestNetFlowWindows(unittest.TestCase):
+    def test_interval_confirmation_requires_persistence_and_rejects_a_flip(self):
+        stream = SymbolStream('TEST')
+        for ts in (1000, 1005, 1010, 1015, 1020, 1025):
+            stream.ingest_interval_flow(IntervalFlowSample(ts=ts, call_vol_ask_side=100))
+        self.assertEqual(stream.snapshot(now=1025).aggressor_confirmed_direction, "NOT_READY")
+        stream.ingest_interval_flow(IntervalFlowSample(ts=1030, call_vol_ask_side=100))
+        self.assertEqual(stream.snapshot(now=1030).aggressor_confirmed_direction, "CALL")
+        stream.ingest_interval_flow(IntervalFlowSample(ts=1035, put_vol_ask_side=100))
+        self.assertEqual(stream.snapshot(now=1035).aggressor_confirmed_direction, "NEUTRAL")
+        self.assertEqual(stream.snapshot(now=1050).aggressor_confirmed_direction, "NOT_READY")
+
+    def test_interval_gap_does_not_count_as_persistent_pressure(self):
+        stream = SymbolStream('TEST')
+        for ts in (1000, 1030):
+            stream.ingest_interval_flow(IntervalFlowSample(ts=ts, call_vol_ask_side=100))
+        self.assertEqual(stream.snapshot(now=1030).aggressor_confirmed_direction, "NEUTRAL")
+
+    def test_balanced_interval_pressure_does_not_confirm_direction(self):
+        stream = SymbolStream('TEST')
+        for ts in range(1000, 1031, 5):
+            stream.ingest_interval_flow(IntervalFlowSample(ts=ts, call_vol_ask_side=55,
+                                                          call_vol_bid_side=45))
+        self.assertEqual(stream.snapshot(now=1030).aggressor_confirmed_direction, "NEUTRAL")
+
     def test_four_horizons_use_independent_windows(self):
         # The freshness TTL (is the stream alive right now) and each horizon's
         # window length (how far back to look) are different concepts -- the

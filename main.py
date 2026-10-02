@@ -97,6 +97,9 @@ def build_runtime() -> tuple:
     audit = AuditLog(os.environ.get("ENGINE_LOG_DIR", "logs"))
     audit.emit("ENGINE_START", symbols=symbols, environment=env,
                orders_enabled=bool(os.environ.get("TRADIER_ACCOUNT_ID", "").strip()),
+               max_order_debit=float(os.environ.get("MAX_ORDER_DEBIT", "300")),
+               max_total_debit=float(os.environ.get("MAX_TOTAL_DEBIT", "600")),
+               order_quantity=order_quantity,
                reversal_phase_exit_enabled=reversal_exit_enabled)
     audit.emit("REVERSAL_CONFIG", **vars(reversal_settings))
 
@@ -276,6 +279,9 @@ def main() -> None:
         sys.exit(1)
 
     print(f"Watching: {', '.join(symbols)}")
+    if executor is not None:
+        print(f"Sandbox debit caps: ${executor.max_order_debit:,.2f} per order; "
+              f"${executor.max_total_debit:,.2f} total", flush=True)
     if executor is not None:
         executor.start()
     tradier_stream.start()

@@ -1,4 +1,4 @@
-.env
+# .env contains public settings only; keep credentials in these private files.
 credentials.env
 secrets.env
 __pycache__/

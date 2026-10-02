@@ -167,28 +167,29 @@ class UWConfluenceRead:
 
 
 def uw_confluence(snap: SymbolSnapshot, direction: str) -> UWConfluenceRead:
-    """Checks five independent, freshness-gated UW reads against the proposed
-    direction: flow_30s, flow_1m, flow_3m, flow_5m, and aggressor_direction.
-    `supports` requires at least 4 of the 5 to agree with `direction` and none
-    of the readable ones to disagree outright with more weight than that --
-    a materially stricter bar than the four-horizon majority vote that was
-    replayed against real data and found wrong 72% of the time it fired.
-    Anything short of that returns ready=True, supports=False, opposes=False
-    ("no clear read") rather than guessing -- confluence should raise or lower
-    confidence, never manufacture it out of a weak signal.
+    """Two distinct feed families, not statistically independent votes.
+
+    Net flow contributes ONE read only when its 1m/3m/5m horizons agree
+    after five minutes of observations. Interval aggressor activity must
+    persist for 30 seconds with >=20% imbalance. A fresh opposing market
+    tide vetoes confirmation; market tide never adds another ticker vote.
+    This is UW evidence only and never blocks a PSAR entry.
     """
     opposite = "PUT" if direction == "CALL" else "CALL"
-    readings = [snap.flow_30s, snap.flow_1m, snap.flow_3m, snap.flow_5m, snap.aggressor_direction]
-    usable = [r for r in readings if r in ("CALL", "PUT")]
-    if len(usable) < 3:
-        return UWConfluenceRead(supports=False, opposes=False, ready=False,
-                                 agreeing_signals=0, total_signals=len(readings))
+    horizons = (snap.flow_1m, snap.flow_3m, snap.flow_5m)
+    net = (horizons[0] if snap.net_flow_state == "FRESH"
+           and snap.net_flow_coverage_sec >= 300 and len(set(horizons)) == 1
+           and horizons[0] in ("CALL", "PUT") else "NOT_READY")
+    interval = (snap.aggressor_confirmed_direction
+                if snap.interval_flow_state == "FRESH" else "NOT_READY")
+    usable = [r for r in (net, interval) if r in ("CALL", "PUT")]
     agree = sum(1 for r in usable if r == direction)
     disagree = sum(1 for r in usable if r == opposite)
-    supports = agree >= 4 and disagree == 0
-    opposes = disagree >= 4 and agree == 0
-    return UWConfluenceRead(supports=supports, opposes=opposes, ready=True,
-                             agreeing_signals=agree, total_signals=len(readings))
+    tide = snap.market_tide_direction if snap.market_tide_state == "FRESH" else "NOT_READY"
+    return UWConfluenceRead(supports=agree == 2 and tide != opposite,
+                             opposes=disagree == 2 and tide != direction,
+                             ready=len(usable) == 2,
+                             agreeing_signals=agree, total_signals=2)
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ not against an actual live response. Smoke-test against Tradier's sandbox
 before trusting this in anything real.
 
 The access token is read ONLY from the TRADIER_ACCESS_TOKEN environment
-variable (see .env.example at the package root). It is never hardcoded,
+variable (see README.md for the private credentials file). It is never hardcoded,
 never logged, and never included in any error message this module raises.
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def _load_token(explicit_token: Optional[str] = None) -> str:
     if not token:
         raise TradierAuthError(
             "TRADIER_ACCESS_TOKEN is not set. Set it as an environment variable "
-            "(see .env.example) -- this client never accepts a token as a literal "
+            "(see README.md for the private credentials file) -- this client never accepts a token as a literal "
             "in code."
         )
     return token
