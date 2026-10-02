@@ -240,7 +240,7 @@ the captured **live entry ask** by the greater of eight times the spread at
 the bid high and 8% of the live entry ask. Once armed, its trail is the
 greater of four times that peak spread and 25% of the earned premium.
 A later widening spread cannot loosen the trail. The -30% live-bid emergency
-stop and 15:50 ET close remain immediate; stall and opposing-PSAR rules still
+stop and 15:50 ET close remain immediate; enabled stall and opposing-PSAR rules still
 operate independently. All decisions continue to use live quotes, never
 sandbox fills. `POSITION_OBSERVATION.arm_required_gain` and `active_trail`
 record the actual thresholds on each observed quote.
@@ -504,3 +504,11 @@ use this stricter confirmation and require a fresh live bid to fall at least
 one current spread from its observed peak; no flow-only exit is added.
 Contract-level opening-flow classification is not available from these ticker
 rollups and is not inferred.
+
+### Stall exit bypass
+
+`STALL_EXIT_ENABLED=false` in the included `.env` disables the stall sale.
+It is also disabled by default when no setting exists. Set it to `true` and
+restart to restore the rule. Startup logs record the effective setting.
+Emergency stop, profit giveback, opposing PSAR, perfected reversal,
+price-confirmed UW thesis exit, and end-of-day close remain active.

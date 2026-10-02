@@ -214,12 +214,21 @@ class TestFreshPSARRecomputation(unittest.TestCase):
 
 
 class TestStallExit(unittest.TestCase):
-    def test_unarmed_stall_after_completed_bar_and_no_bid_high_exits(self):
+    def test_stall_is_bypassed_by_default(self):
         closes = [100 + i for i in range(10)] + [109] * 5
         snap, now = make_snapshot(closes, direction='CALL')
         pos = PositionState(symbol='TEST', direction='CALL', opened_ts=now-600, entry_option_price=1.0)
         pos.update_price(1.01, now - 300, ask=1.05)
         decision = evaluate_exit(snap, pos, now=now)
+        self.assertEqual(decision.state, "HOLD")
+        self.assertNotIn("STALL_EXIT", decision.reasons)
+
+    def test_unarmed_stall_after_completed_bar_and_no_bid_high_exits(self):
+        closes = [100 + i for i in range(10)] + [109] * 5
+        snap, now = make_snapshot(closes, direction='CALL')
+        pos = PositionState(symbol='TEST', direction='CALL', opened_ts=now-600, entry_option_price=1.0)
+        pos.update_price(1.01, now - 300, ask=1.05)
+        decision = evaluate_exit(snap, pos, now=now, config=ExitConfig(stall_exit_enabled=True))
         self.assertEqual(decision.reasons, ("STALL_EXIT",))
 
     def test_armed_position_is_never_evaluated_for_stall(self):

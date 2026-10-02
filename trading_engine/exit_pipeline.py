@@ -105,6 +105,7 @@ class ExitConfig:
     # percentage move in an expensive option.
     premium_arm_fraction: float = 0.08
     stall_progress_multiple: float = 2.0
+    stall_exit_enabled: bool = False
     spread_trail_multiple: float = 4.0
     peak_profit_giveback_fraction: float = 0.25
     require_price_confirmation_after_proven: bool = False  # see module docstring (b)
@@ -308,7 +309,7 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
         if giveback >= trail / 2 - eps:
             return ExitDecision(state="PROFIT_LOCK", reasons=("PROFIT_GIVEBACK_WATCH",),
                                  gain_pct=gain, peak_gain_pct=peak)
-    elif (not pos.armed and option_quote_fresh and spread > 0 and peak_spread > 0
+    elif (config.stall_exit_enabled and not pos.armed and option_quote_fresh and spread > 0 and peak_spread > 0
             and underlying_fresh and bars
             and bars[-1].ts >= pos.opened_ts and pos.last_new_peak_ts > 0
             and pos.last_new_peak_ts <= bars[-1].ts

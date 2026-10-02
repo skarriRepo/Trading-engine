@@ -83,6 +83,7 @@ def build_runtime() -> tuple:
     symbols = configured_symbols(os.environ.get("WATCH_SYMBOLS", ""))
     order_quantity = int(os.environ.get("ORDER_QUANTITY", "1"))
     reversal_exit_enabled = os.environ.get("REVERSAL_PHASE_EXIT", "true").strip().lower() in {"1", "true", "yes"}
+    stall_exit_enabled = os.environ.get("STALL_EXIT_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
     reversal_settings = ReversalSettings(
         momentum_display=os.environ.get("REVERSAL_MOMENTUM_DISPLAY", "Completed"),
         support_resistance=os.environ.get("REVERSAL_SUPPORT_RESISTANCE", "true").lower() in {"1", "true", "yes"},
@@ -100,6 +101,7 @@ def build_runtime() -> tuple:
                max_order_debit=float(os.environ.get("MAX_ORDER_DEBIT", "300")),
                max_total_debit=float(os.environ.get("MAX_TOTAL_DEBIT", "600")),
                order_quantity=order_quantity,
+               stall_exit_enabled=stall_exit_enabled,
                reversal_phase_exit_enabled=reversal_exit_enabled)
     audit.emit("REVERSAL_CONFIG", **vars(reversal_settings))
 
@@ -169,7 +171,8 @@ def build_runtime() -> tuple:
     rt = TradingRuntime(dashboard=dashboard, option_entry_price_provider=option_price_provider,
                         order_executor=executor,
                         audit=audit,
-                        exit_config=ExitConfig(reversal_phase_exit=reversal_exit_enabled),
+                        exit_config=ExitConfig(reversal_phase_exit=reversal_exit_enabled,
+                                               stall_exit_enabled=stall_exit_enabled),
                         reversal_settings=reversal_settings,
                         option_quote_recovery=_recover_option_quote if executor else None,
                         option_quote_timeout_sec=float(os.environ.get("OPTION_QUOTE_TIMEOUT_SEC", "20")),
