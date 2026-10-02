@@ -60,6 +60,17 @@ from trading_engine.audit_log import AuditLog, ET
 from trading_engine.post_exit_observer import PostExitQuoteObserver
 from datetime import datetime
 
+DEFAULT_WATCH_SYMBOLS = (
+    "SPY", "QQQ", "IWM", "TSLA", "NVDA", "AAPL", "AMD", "AMZN",
+    "META", "MSFT", "GOOGL", "NFLX",
+)
+
+
+def configured_symbols(value: str = "") -> list[str]:
+    """Always monitor the requested universe; WATCH_SYMBOLS adds extras."""
+    return list(dict.fromkeys((*DEFAULT_WATCH_SYMBOLS,
+                               *(part.strip().upper() for part in value.split(",") if part.strip()))))
+
 
 def build_runtime() -> tuple:
     load_engine_environment()
@@ -68,9 +79,7 @@ def build_runtime() -> tuple:
     if env not in {"production", "sandbox"}:
         raise ValueError("TRADIER_ENV must be sandbox or production")
     base_url = PRODUCTION_BASE if env == "production" else SANDBOX_BASE
-    symbols = [s.strip().upper() for s in os.environ.get("WATCH_SYMBOLS", "SPY").split(",") if s.strip()]
-    if not symbols:
-        raise ValueError("WATCH_SYMBOLS needs at least one underlying ticker")
+    symbols = configured_symbols(os.environ.get("WATCH_SYMBOLS", ""))
     order_quantity = int(os.environ.get("ORDER_QUANTITY", "1"))
     reversal_exit_enabled = os.environ.get("REVERSAL_PHASE_EXIT", "true").strip().lower() in {"1", "true", "yes"}
     audit = AuditLog(os.environ.get("ENGINE_LOG_DIR", "logs"))
