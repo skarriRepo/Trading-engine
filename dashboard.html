@@ -104,6 +104,7 @@
       <div class="section-head"><div><h2>Diagnostics</h2><p>Market state and the decisions behind entries</p></div><div class="toolbar"><label for="signal-filter" class="muted">Filter signals</label><input class="search" id="signal-filter" type="search" placeholder="Symbol, action, reason…" autocomplete="off"></div></div>
       <div class="panel"><div class="panel-head"><h2>Market Scan</h2><small>Freshness reflects the last received update</small></div><div class="table-scroll" id="diagnostics-scan"></div></div>
       <div class="panel"><div class="panel-head"><h2>Recent signal decisions</h2><small id="signal-count">Latest decisions</small></div><div class="table-scroll" id="diagnostics-signals"></div></div>
+      <div class="panel"><div class="panel-head"><h2>Independent reversal events</h2><small id="reversal-count">Completed candles only</small></div><div class="table-scroll" id="diagnostics-reversals"></div></div>
       <p class="data-note">A TAKE decision is an entry authorization, not confirmation of a broker fill. Check broker status and Trades for execution.</p>
     </section>
     <footer class="footer">Times shown in New York. All strategy returns use live option asks and bids. Dollar results estimate the live entry ask to live exit trigger bid, before fees; broker fills only confirm sandbox execution. Data covers the current engine run.</footer>
@@ -134,7 +135,8 @@
       closed: [ ['Symbol',r=>`<span class="symbol">${text(r.symbol)}</span>`],['Side',r=>pill(r.direction)],['Source',r=>pill(r.broker_confirmed?'SANDBOX ORDER':'INTERNAL',r.broker_confirmed?'good':'caution')],['Qty',r=>text(r.quantity)],['Live ask',r=>`$${text(fixed(r.entry_price))}`],['Live exit bid',r=>r.exit_price>0?`$${text(fixed(r.exit_price))}`:'—'],['Quote result',r=>moneyCell(r.live_quote_pnl_usd)],['Return',r=>r.exit_price>0?pctCell(r.final_gain_pct):'—'],['Peak quote',r=>pctCell(r.peak_gain_pct)],['Exit reason',r=>pills(r.exit_reasons)],['Duration',r=>text(duration(r.duration_sec))] ],
       orders: [ ['Symbol',r=>`<span class="symbol">${text(r.symbol)}</span>`],['Status',r=>state(r.status)],['Side',r=>text(r.side)],['Contract',r=>text(r.option)],['Order ID',r=>text(r.order_id)],['Detail',r=>text(r.detail)] ],
       scan: [ ['Symbol',r=>`<span class="symbol">${text(r.symbol)}</span>`],['Underlying',r=>text(fixed(r.price,3))],['Price feed',r=>state(!r.connected?'DISCONNECTED':Date.now()/1000-(r.recorded_ts||0)>20?'STALE':r.price_state)],['Bar',r=>state(r.bar_state)],['30s net prem',r=>text(r.flow_30s)],['1m net prem',r=>text(r.flow_1m)],['3m net prem',r=>text(r.flow_3m)],['5m net prem',r=>text(r.flow_5m)],['GEX sign',r=>text(r.gex_state==='FRESH'?r.gamma_path:r.gex_state||'NOT_READY')],['Last PSAR decision',r=>r.action?state(r.action):'<span class="muted">Awaiting flip</span>'],['Decision time ET',r=>r.decision_ts?text(etTime(r.decision_ts)):'—'],['Candle momentum',r=>text(r.momentum_state)] ],
-      signals: [ ['Time ET',r=>text(etTime(r.ts))],['Symbol',r=>`<span class="symbol">${text(r.symbol)}</span>`],['Side',r=>pill(r.direction)],['Source',r=>text(r.source)],['Decision',r=>state(r.action)],['Reasons',r=>pills(r.reasons)],['Momentum',r=>text(r.momentum)] ]
+      signals: [ ['Time ET',r=>text(etTime(r.ts))],['Symbol',r=>`<span class="symbol">${text(r.symbol)}</span>`],['Side',r=>pill(r.direction)],['Source',r=>text(r.source)],['Decision',r=>state(r.action)],['Reasons',r=>pills(r.reasons)],['Momentum',r=>text(r.momentum)] ],
+      reversals: [ ['Bar ET',r=>text(etTime(r.bar_ts))],['Symbol',r=>`<span class="symbol">${text(r.symbol)}</span>`],['Event',r=>state(r.kind)],['Side',r=>pill(r.direction)],['P',r=>r.perfected?pill('P','good'):'—'],['Count',r=>r.count||'—'],['Level',r=>text(fixed(r.level,2))],['Details',r=>text(r.detail)] ]
     };
     function table(target,kind,rows,empty){
       const headers=cols[kind].map(c=>`<th scope="col">${c[0]}</th>`).join('');
@@ -175,6 +177,9 @@
       const rows=latest.signals.filter(r=>!filter||[r.symbol,r.action,r.direction,r.source,...(r.reasons||[])].join(' ').toLowerCase().includes(filter)).slice(0,100);
       $('signal-count').textContent=`${rows.length} shown · ${latest.signals.length} retained`;
       table('diagnostics-signals','signals',rows,'No matching signal decisions');
+      const reversals=(latest.reversals||[]).filter(r=>!filter||[r.symbol,r.kind,r.direction,r.detail].join(' ').toLowerCase().includes(filter)).slice(0,100);
+      $('reversal-count').textContent=`${reversals.length} shown · ${(latest.reversals||[]).length} retained`;
+      table('diagnostics-reversals','reversals',reversals,'No completed reversal events yet');
     }
     async function refresh(){
       if(fetching)return;fetching=true;

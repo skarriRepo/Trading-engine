@@ -65,6 +65,7 @@ class TestRuntimeWiring(unittest.TestCase):
 
         rt = TradingRuntime(
             option_entry_price_provider=lambda sym, d, now, u: OptionEntryResult(price=1.0, occ_symbol="TEST260101C00100000"),
+            exit_config=ExitConfig(reversal_phase_exit=False),
         )
         rt.audit = FakeAudit()
 
@@ -97,7 +98,8 @@ class TestRuntimeWiring(unittest.TestCase):
             def emit(self, event, **kw):
                 pass
 
-        rt = TradingRuntime(option_entry_price_provider=lambda sym, d, now, u: OptionEntryResult(price=1.0, occ_symbol="TEST260101C00100000"))
+        rt = TradingRuntime(option_entry_price_provider=lambda sym, d, now, u: OptionEntryResult(price=1.0, occ_symbol="TEST260101C00100000"),
+                            exit_config=ExitConfig(reversal_phase_exit=False))
         rt.audit = FakeAudit()
         down = [112 - i for i in range(14)]
         up = [99 + i + (i * i) * 0.03 for i in range(20)]

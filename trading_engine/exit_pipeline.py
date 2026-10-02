@@ -60,6 +60,7 @@ from .entry_pipeline import (
     PSARParams, DEFAULT_PSAR, compute_psar,
     momentum_from_bars, momentum_ok, uw_confluence,
 )
+from .reversal_signals import ReversalFrame, replay_reversal
 
 
 def structure_from_bars(bars: Tuple[Bar, ...], lookback: int = 6) -> str:
@@ -81,29 +82,13 @@ def structure_ok(direction: str, structure: str) -> bool:
 
 
 def completed_reversal_phase(bars: Tuple[Bar, ...]) -> Tuple[str, bool]:
-    """Return the latest completed Lux-style 9-count and its perfected flag.
-
-    A lower close than four bars ago counts toward a bullish reversal;
-    otherwise the candle counts toward a bearish reversal. Only a *new*
-    completion on the latest bar is returned; old chart markers cannot fire
-    later in a position. This deliberately excludes intrabar Pine alerts.
-    """
-    if len(bars) < 13:
+    """Compatibility wrapper around the complete independent indicator."""
+    if not bars:
         return "", False
-    bullish = bearish = 0
-    for i in range(4, len(bars)):
-        if bars[i].close < bars[i - 4].close:
-            bullish, bearish = (1 if bullish == 9 else bullish + 1), 0
-        else:
-            bearish, bullish = (1 if bearish == 9 else bearish + 1), 0
-    if bullish == 9:
-        i = len(bars) - 1
-        perfected = (bars[i].low <= bars[i - 3].low and bars[i].low <= bars[i - 2].low) or (bars[i - 1].low <= bars[i - 3].low and bars[i - 1].low <= bars[i - 2].low)
-        return "CALL", perfected
-    if bearish == 9:
-        i = len(bars) - 1
-        perfected = (bars[i].high >= bars[i - 3].high and bars[i].high >= bars[i - 2].high) or (bars[i - 1].high >= bars[i - 3].high and bars[i - 1].high >= bars[i - 2].high)
-        return "PUT", perfected
+    frame = replay_reversal(bars)[-1]
+    for event in frame.events:
+        if event.kind == "MOMENTUM_COMPLETE":
+            return event.direction, event.perfected
     return "", False
 
 
@@ -231,7 +216,8 @@ class ExitDecision:
 
 def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float] = None,
                    config: ExitConfig = DEFAULT_EXIT_CONFIG,
-                   option_quote_fresh: bool = True) -> ExitDecision:
+                   option_quote_fresh: bool = True,
+                   reversal_frame: Optional[ReversalFrame] = None) -> ExitDecision:
     now = now if now is not None else time.time()
 
     # 1. EOD -- unconditional, checked first, regardless of anything else below.
@@ -275,7 +261,13 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
     # The chart's perfected opposing P is actionable at the close of its bar.
     # A red P exits a CALL; a green P exits a PUT. The live bid must be fresh
     # and positive for a broker sell, but a giveback threshold is not required.
-    reversal_side, perfected = completed_reversal_phase(bars) if underlying_fresh else ("", False)
+    if underlying_fresh and bars:
+        frame = (reversal_frame if reversal_frame and reversal_frame.bar_ts == bars[-1].ts
+                 else replay_reversal(bars)[-1])
+        marker = next((e for e in frame.events if e.kind == "MOMENTUM_COMPLETE"), None)
+        reversal_side, perfected = (marker.direction, marker.perfected) if marker else ("", False)
+    else:
+        reversal_side, perfected = "", False
     if (config.reversal_phase_exit and option_quote_fresh and pos.current_option_price > 0
             and perfected and reversal_side == opposite
             and bars[-1].ts >= pos.opened_ts):

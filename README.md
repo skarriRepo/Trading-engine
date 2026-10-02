@@ -82,22 +82,7 @@ filter) and implements `TradingRuntime.option_entry_price_provider`.
 | `trading_engine/entry_pipeline.py` | PSAR flip trigger with candle momentum and UW directional flow recorded as observations, plus optional assessment of actual fresh gamma levels. Neither momentum nor UW availability blocks entry. No structure rule or fabricated ATR target is used for entry. |
 | `trading_engine/contract_selection.py` | Selects the option contract using current underlying price from a production chain prefetched on a bounded background worker. A missing or expired snapshot refuses the one-shot entry. |
 | `trading_engine/exit_pipeline.py` | `PositionState`, `evaluate_exit` — the exit ladder. Recomputes PSAR fresh every call; never reads a cached direction field. |
-
-### Reversal marker exit candidate
-
-The engine computes the chart's bullish/bearish 9-count momentum phase from
-**completed underlying bars**. A perfected red `P` on a bar after entry exits
-a CALL; a perfected green `P` exits a PUT. A fresh positive live option bid
-is required to submit the sandbox sell. Plain markers, old markers and
-intrabar markers cannot trigger it. The exit reason is
-`OPPOSITE_PERFECT_REVERSAL`; emergency and EOD exits have higher priority.
-
-This rule is enabled by default. Set `REVERSAL_PHASE_EXIT=false` in `.env`
-to disable it. `POSITION_OBSERVATION` records
-`reversal_phase_side`, `reversal_phase_perfected`,
-`reversal_phase_opposes_position`, `reversal_bid_retreat`, and
-`reversal_perfect_exit_candidate`. The available candle replay does not
-contain contemporaneous option bids, so it cannot estimate the P&L impact.
+| `trading_engine/reversal_signals.py` | Completed-bar Python adaptation of the supplied LuxAlgo Pine: 9-count momentum, early 8, perfected P, 13-count exhaustion, support/resistance, risk/target levels, optional L/S setups, warnings and level crossings. |
 | `trading_engine/contract_selection.py` | `select_contract`, `make_option_entry_price_provider` — turns an option chain into a real, ask-priced entry. |
 | `trading_engine/tradier_client.py` | Tradier REST client — quotes, time-and-sales, expirations, option chains. Sandbox token from `TRADIER_ACCESS_TOKEN`; a separate production market-data client can use `TRADIER_LIVE_DATA_TOKEN`. |
 | `trading_engine/history_warmup.py` | One-time intraday 1-minute time-and-sales fetch; aggregates complete contiguous 2-minute OHLCV bars for PSAR and momentum without replaying historical entries. |
@@ -107,6 +92,29 @@ contain contemporaneous option bids, so it cannot estimate the P&L impact.
 | `trading_engine/tradier_orders.py` | Tradier option order preview, submit, and account order/position reads. Form-encoded requests with no automatic retry. |
 | `trading_engine/sandbox_execution.py` | Sandbox-only journaled order lifecycle; confirms full broker fills before changing positions. |
 | `main.py` | Real entry point — loads tokens from `.env`, wires Tradier, order placement (optional), and (optionally) UW into `TradingRuntime` and the dashboard, runs both. |
+
+### Independent reversal events and P exits
+
+The engine calculates the supplied Pine script's phases from **its own
+completed 2-minute underlying bars**. Events are logged as `REVERSAL_SIGNAL`
+with symbol, bar timestamp, event kind, direction, count, perfected flag and
+level. `REVERSAL_CONFIG` records settings at startup. Warmup primes the
+indicator without emitting old signals. No TradingView alerts or sandbox
+quotes are used. The optional L/S setups create observation events only.
+
+A perfected red `P` on a post-entry bar exits a CALL; a perfected green `P`
+exits a PUT. A fresh positive live option bid is required to send the sandbox
+sell. Plain markers, old markers and intrabar markers do not trigger this
+exit. EOD and emergency exits retain priority. Set `REVERSAL_PHASE_EXIT=false`
+to disable the P exit. `POSITION_OBSERVATION` records the marker and candidate
+fields. The available candle replay lacks synchronized option bids and cannot
+measure P&L impact.
+
+Original Reversal Signals [LuxAlgo] © LuxAlgo is CC BY-NC-SA 4.0. This
+adaptation retains attribution and that license for the indicator module.
+Pine drawings are represented as structured events; the dashboard does not
+draw the indicator. Exact TradingView parity needs a candle-by-candle check
+against the same OHLC feed and chart session, which has not been completed.
 | `trading_engine/dashboard_store.py` | Thread-safe store feeding the dashboard. Decoupled from how it's fed (live runtime or replay). |
 | `trading_engine/runtime.py` | `TradingRuntime` — the orchestration engine. Transport-agnostic: `on_underlying_tick`/`on_option_quote`/`on_net_flow`/etc. are called by a real stream client or a replay driver identically. |
 | `dashboard_app.py`, `dashboard.html` | FastAPI operator dashboard: Overview, Trades, Diagnostics; feed and broker alerts, confirmed-fill P&L, and decision reasons. |

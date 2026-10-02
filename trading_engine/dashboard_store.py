@@ -50,6 +50,7 @@ class DashboardStore:
         self._active: Dict[str, tuple] = {}
         self._closed: List[ClosedTrade] = []
         self._signals = deque(maxlen=500)
+        self._reversals = deque(maxlen=500)
         self._signal_keys = set()
         self._signal_key_order = deque()
 
@@ -77,6 +78,18 @@ class DashboardStore:
     def signal_view(self) -> List[Dict[str, Any]]:
         with self._lock:
             return list(self._signals)
+
+    def record_reversal(self, symbol: str, event) -> None:
+        with self._lock:
+            self._reversals.appendleft({"symbol": symbol, "bar_ts": event.bar_ts,
+                "kind": event.kind, "direction": event.direction,
+                "perfected": event.perfected, "count": event.count,
+                "level": event.value, "visible": event.visible,
+                "pine_alert": event.alert, "detail": event.detail})
+
+    def reversal_view(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            return list(self._reversals)
 
     def record_scan(self, snap: SymbolSnapshot, decision: Optional[EntryDecision] = None,
                      now: Optional[float] = None) -> None:

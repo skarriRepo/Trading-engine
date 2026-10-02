@@ -34,6 +34,7 @@ from .entry_pipeline import (EntryConfig, DEFAULT_ENTRY_CONFIG, evaluate_entry,
                              compute_psar, momentum_from_bars)
 from .exit_pipeline import (ExitConfig, DEFAULT_EXIT_CONFIG, PositionState,
                             evaluate_exit, structure_from_bars)
+from .reversal_signals import ReversalSignals, ReversalSettings
 from .bid_exit_shadow import read_bid_exit
 from .bleed_out_shadow import read_bleed_out_exit
 from .contract_selection import OptionEntryResult
@@ -61,15 +62,19 @@ class TradingRuntime:
                  feed_timeout_sec: float = 15.0,
                  option_quote_timeout_sec: float = 20.0,
                  option_quote_recovery=None,
+                 reversal_settings: ReversalSettings = ReversalSettings(),
                  option_entry_price_provider: Optional[Callable[[str, str, float, float], Optional[OptionEntryResult]]] = None,
                  on_trade_opened: Optional[Callable[[str, PositionState], None]] = None,
                  on_trade_closed: Optional[Callable[[str, PositionState], None]] = None,
                  audit=None):
         self._state_lock = threading.RLock()
         self.store = SymbolStateStore(bar_seconds=bar_seconds)
+        self.bar_seconds = float(bar_seconds)
         self.dashboard = dashboard if dashboard is not None else DashboardStore()
         self.entry_config = entry_config
         self.exit_config = exit_config
+        self.reversal_settings = reversal_settings
+        self._reversal_engines: Dict[str, ReversalSignals] = {}
         self.positions: Dict[str, tuple] = {}       # underlying symbol -> (trade_id, PositionState)
         # occ option symbol -> underlying symbol. Quotes arrive keyed by the
         # specific contract (e.g. "AAPL260115C00150000"), but positions are
@@ -148,8 +153,12 @@ class TradingRuntime:
         opposite = "PUT" if pos.direction == "CALL" else "CALL"
         uw = uw_confluence(snap, opposite)
         last_bar = bars[-1] if bars else None
-        from .exit_pipeline import completed_reversal_phase
-        reversal_side, reversal_perfected = completed_reversal_phase(bars)
+        frame = (self._reversal_frame(symbol, bars, emit_events=False)
+                 if snap.price_state == snap.bar_state == "FRESH"
+                 else (self._reversal_engines[symbol].frames[-1]
+                       if symbol in self._reversal_engines and self._reversal_engines[symbol].frames else None))
+        marker = next((e for e in frame.events if e.kind == "MOMENTUM_COMPLETE"), None) if frame else None
+        reversal_side, reversal_perfected = (marker.direction, marker.perfected) if marker else ("", False)
         reversal_opposes = bool(last_bar and reversal_side == opposite and
                                 last_bar.ts >= pos.opened_ts and
                                 snap.price_state == snap.bar_state == "FRESH")
@@ -414,6 +423,7 @@ class TradingRuntime:
         """Prime completed bars without replaying a pre-startup PSAR trade."""
         for bar in bars:
             self.store.ingest_bar(symbol, bar)
+        self._reversal_frame(symbol, tuple(bars), emit_events=False)
         if bars:
             flip = latest_psar_flip(tuple(bars), self.entry_config.psar)
             if flip:
@@ -421,10 +431,41 @@ class TradingRuntime:
 
     # -- core orchestration --
 
+    def _reversal_frame(self, symbol, bars, *, emit_events=True):
+        """Advance each symbol once per closed bar; never replay past alerts."""
+        engine = self._reversal_engines.setdefault(symbol, ReversalSignals(self.reversal_settings))
+        if bars and engine.bars and bars[-1].ts < engine.bars[-1].ts:
+            # A delayed option quote can evaluate with an older market time;
+            # it must not rewind state or reissue completed-bar triggers.
+            return engine.frames[-1]
+        for bar in bars:
+            if engine.bars and bar.ts <= engine.bars[-1].ts:
+                continue
+            if engine.bars and bar.ts - engine.bars[-1].ts > self.bar_seconds * 1.5:
+                engine = self._reversal_engines[symbol] = ReversalSignals(self.reversal_settings)
+            frame = engine.update(bar)
+            if emit_events:
+                for event in frame.events:
+                    if event.kind not in {"MOMENTUM_COUNT", "EXHAUSTION_COUNT"}:
+                        self.dashboard.record_reversal(symbol, event)
+            if emit_events and self.audit:
+                for event in frame.events:
+                    if event.kind not in {"MOMENTUM_COUNT", "EXHAUSTION_COUNT"}:
+                        self.audit.emit("REVERSAL_SIGNAL", durable=False, symbol=symbol,
+                                        market_ts=bar.ts, trigger=event.kind,
+                                        direction=event.direction, perfected=event.perfected,
+                                        count=event.count, level=event.value,
+                                        visible=event.visible, pine_alert=event.alert,
+                                        detail=event.detail)
+        return engine.frames[-1] if engine.frames else None
+
     def _evaluate_symbol(self, symbol: str, now: float,
                          entries_allowed: bool = True, eod_only: bool = False,
                          observation_source: str = "UNDERLYING_OR_CLOCK") -> None:
         snap = self.store.snapshot(symbol, now=now)
+        indicator_bars = completed_bars(snap.bars, self.bar_seconds, now)
+        reversal_frame = (self._reversal_frame(symbol, indicator_bars)
+                          if snap.price_state == snap.bar_state == "FRESH" else None)
 
         if symbol in self.pending_symbols or symbol in self.blocked_symbols:
             if self.audit and symbol in self.positions and observation_source == "OPTION_QUOTE":
@@ -441,7 +482,7 @@ class TradingRuntime:
             trade_id, pos = self.positions[symbol]
             quote_fresh = (not self.order_executor or self._quote_fresh(trade_id, time.time()))
             decision = evaluate_exit(snap, pos, now=now, config=self.exit_config,
-                                     option_quote_fresh=quote_fresh)
+                                     option_quote_fresh=quote_fresh, reversal_frame=reversal_frame)
             if self.audit:
                 shadow = read_bid_exit(pos, now, quote_fresh, self.exit_config)
                 if shadow.reason and trade_id not in self._bid_shadow_first:

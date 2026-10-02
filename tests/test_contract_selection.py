@@ -142,7 +142,9 @@ class TestRuntimeAdapter(unittest.TestCase):
         chain = [contract('CALL', 100.0, 0, 0.95, 1.00),
                  contract('CALL', 130.0, 0, 0.95, 1.00)]  # a strike near where price ends up too
         provider = make_option_entry_price_provider(chain_source=lambda sym, now: chain)
-        rt = TradingRuntime(option_entry_price_provider=provider)
+        from trading_engine.exit_pipeline import ExitConfig
+        rt = TradingRuntime(option_entry_price_provider=provider,
+                            exit_config=ExitConfig(reversal_phase_exit=False))
 
         down = [100 - .1 * i for i in range(14)]
         up = [98.7 + 5 + 5 * i for i in range(10)]

@@ -54,6 +54,7 @@ from trading_engine.sandbox_execution import SandboxExecution
 from trading_engine.tradier_client import TradierAuthError
 from trading_engine.runtime import TradingRuntime
 from trading_engine.exit_pipeline import ExitConfig
+from trading_engine.reversal_signals import ReversalSettings
 from trading_engine.dashboard_store import DashboardStore
 from trading_engine.history_warmup import warmup_symbols
 from trading_engine.audit_log import AuditLog, ET
@@ -82,10 +83,22 @@ def build_runtime() -> tuple:
     symbols = configured_symbols(os.environ.get("WATCH_SYMBOLS", ""))
     order_quantity = int(os.environ.get("ORDER_QUANTITY", "1"))
     reversal_exit_enabled = os.environ.get("REVERSAL_PHASE_EXIT", "true").strip().lower() in {"1", "true", "yes"}
+    reversal_settings = ReversalSettings(
+        momentum_display=os.environ.get("REVERSAL_MOMENTUM_DISPLAY", "Completed"),
+        support_resistance=os.environ.get("REVERSAL_SUPPORT_RESISTANCE", "true").lower() in {"1", "true", "yes"},
+        level_style=os.environ.get("REVERSAL_LEVEL_STYLE", "Step Line w/ Diamonds"),
+        momentum_risk=os.environ.get("REVERSAL_MOMENTUM_RISK", "false").lower() in {"1", "true", "yes"},
+        exhaustion_display=os.environ.get("REVERSAL_EXHAUSTION_DISPLAY", "Completed"),
+        exhaustion_risk=os.environ.get("REVERSAL_EXHAUSTION_RISK", "false").lower() in {"1", "true", "yes"},
+        exhaustion_target=os.environ.get("REVERSAL_EXHAUSTION_TARGET", "false").lower() in {"1", "true", "yes"},
+        trade_setups=os.environ.get("REVERSAL_TRADE_SETUPS", "None"),
+        setup_warnings=os.environ.get("REVERSAL_SETUP_WARNINGS", "false").lower() in {"1", "true", "yes"},
+    )
     audit = AuditLog(os.environ.get("ENGINE_LOG_DIR", "logs"))
     audit.emit("ENGINE_START", symbols=symbols, environment=env,
                orders_enabled=bool(os.environ.get("TRADIER_ACCOUNT_ID", "").strip()),
                reversal_phase_exit_enabled=reversal_exit_enabled)
+    audit.emit("REVERSAL_CONFIG", **vars(reversal_settings))
 
     rest_client = TradierRestClient(config=TradierConfig(base_url=base_url))
     live_data_token = os.environ.get("TRADIER_LIVE_DATA_TOKEN", "").strip()
@@ -154,6 +167,7 @@ def build_runtime() -> tuple:
                         order_executor=executor,
                         audit=audit,
                         exit_config=ExitConfig(reversal_phase_exit=reversal_exit_enabled),
+                        reversal_settings=reversal_settings,
                         option_quote_recovery=_recover_option_quote if executor else None,
                         option_quote_timeout_sec=float(os.environ.get("OPTION_QUOTE_TIMEOUT_SEC", "20")),
                         max_market_age_sec=10)

@@ -43,6 +43,11 @@ def api_signals() -> JSONResponse:
     return JSONResponse(store.signal_view())
 
 
+@app.get("/api/reversals")
+def api_reversals() -> JSONResponse:
+    return JSONResponse(store.reversal_view())
+
+
 @app.get("/api/orders")
 def api_orders() -> JSONResponse:
     return JSONResponse(order_executor.order_view() if order_executor else [])
@@ -60,6 +65,7 @@ def api_overview() -> JSONResponse:
         "data_mode": data_mode,
         "active": active, "closed": closed, "orders": orders,
         "scan": scan, "signals": store.signal_view(),
+        "reversals": store.reversal_view(),
         "live_quote_pnl_usd": round(sum(
             row["live_quote_pnl_usd"] for row in closed
             if row["live_quote_pnl_usd"] is not None), 2),
