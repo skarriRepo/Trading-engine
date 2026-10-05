@@ -31,11 +31,11 @@ class TestPSAR(unittest.TestCase):
         bars = make_bars(closes)
         points = compute_psar(bars, PSARParams(start=0.03, increment=0.02, maximum=0.20))
         flips = [p for p in points if p.is_flip]
-        self.assertEqual(len(flips), 1)
-        self.assertEqual(flips[0].direction, "PUT")
+        self.assertEqual([p.direction for p in flips], ["CALL", "PUT"])
+        self.assertEqual(flips[-1].direction, "PUT")
 
-    def test_fewer_than_three_bars_returns_empty(self):
-        bars = make_bars([100, 101])
+    def test_fewer_than_two_bars_returns_empty(self):
+        bars = make_bars([100])
         self.assertEqual(compute_psar(bars), ())
 
     def test_latest_psar_flip_returns_none_when_last_bar_did_not_flip(self):

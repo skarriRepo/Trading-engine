@@ -519,3 +519,29 @@ See [the sampled entry study](research/ENTRY_CONFIRMATION_REPLAY.md) and
 `replay_entry_confirmation.py`. This is research only; current entries are
 unchanged. It compares live quotes with fixed recorded exits and explicitly
 identifies missing crossings/quotes instead of inventing fills.
+
+### PSAR calculation correction
+
+The engine now initializes from the second candle, checks reversals before
+clamping to prior lows/highs, uses current extremes on outside reversals,
+and skips acceleration increases on the first trend bar. Signals follow the
+supplied everget script: CALL iff SAR < close; equality is PUT. Only changes
+between valid directions generate flips, on completed bars.
+
+Set PSAR_START, PSAR_INCREMENT and PSAR_MAXIMUM in .env to the chart inputs.
+The shipped settings remain 0.03 / 0.02 / 0.20. For the supplied script's
+original defaults use 0.02 / 0.02 / 0.20, then restart. Prior strategy results
+must be replayed because this correction changes both entry and exit SAR.
+
+Startup requests production history from 04:00 ET on the current session,
+including premarket, and retains up to 600 candles instead of 200. Missing
+minutes are not invented and do not discard preceding available history.
+Historical signals are not executed. Startup HISTORY_WARMUP still reports
+counts; empty/error responses mean history parity is not established.
+
+This is not certified against exported TradingView numeric SAR values.
+Hand-calculated regression cases cover initialization, outside reversals,
+equality, and no future-bar dependence. Different feeds, earlier chart
+history, missing candles, and session selections can still produce different
+SAR values. Restart rebuilds the current session from REST candles, which
+may differ from previously observed stream candles. No webhook is required.

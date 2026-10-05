@@ -223,6 +223,8 @@ class TestRuntimeWiring(unittest.TestCase):
         for c in down + up:
             rt.on_underlying_tick('AAPL', t, c)
             t += 120.0
+            if rt.positions:
+                break  # test lifecycle wiring at the first actual entry
 
         self.assertIn("buy", placed)
         _, pos = rt.positions['AAPL']

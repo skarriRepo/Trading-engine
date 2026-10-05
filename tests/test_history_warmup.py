@@ -26,12 +26,13 @@ class HistoryWarmupTests(unittest.TestCase):
                           bars[0].close, bars[0].volume), (100, 102, 99, 101.5, 20))
         self.assertTrue(all(bars[i].ts - bars[i-1].ts == 120 for i in range(1, len(bars))))
 
-    def test_missing_minute_discards_earlier_disconnected_trend(self):
+    def test_missing_minute_preserves_preceding_history_without_fabrication(self):
         start = datetime(2026, 9, 29, 11, 0, tzinfo=ET)
         rows = minutes(start, 30)
         del rows[18]
         bars = two_minute_bars(rows, (start + timedelta(minutes=31)).timestamp())
-        self.assertEqual(len(bars), 5)  # 11:20 through 11:28 only
+        self.assertEqual(len(bars), 14)
+        self.assertNotIn((start + timedelta(minutes=18)).timestamp(), [b.ts for b in bars])
 
     def test_warmup_seeds_history_without_replaying_historical_flip(self):
         start = datetime(2026, 9, 29, 11, 0, tzinfo=ET)
@@ -65,8 +66,8 @@ class HistoryWarmupTests(unittest.TestCase):
         now = (start + timedelta(minutes=9)).timestamp()
         rt.store.ingest_price("SPY", now, 107)
         decision = evaluate_entry(rt.store.snapshot("SPY", now=now), "CALL", now=now)
-        self.assertEqual(decision.action, "SKIP")
-        self.assertEqual(decision.reasons, ("INSUFFICIENT_BAR_HISTORY",))
+        self.assertEqual(decision.action, "TAKE")
+        self.assertIn("MOMENTUM_NOT_READY_OBSERVATION", decision.reasons)
 
 
 if __name__ == "__main__":

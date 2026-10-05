@@ -6,7 +6,7 @@ signal. The first tradable flip must occur on a newly completed live bar.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 from .symbol_state import Bar
@@ -43,22 +43,18 @@ def two_minute_bars(rows: list[dict], now: float) -> list[Bar]:
         first, second = pair[bucket], pair[bucket + 60]
         out.append(Bar(bucket, first.open, max(first.high, second.high),
                        min(first.low, second.low), second.close, first.volume + second.volume))
-    # Never bridge a missing candle, a halt, or an overnight gap in PSAR.
-    tail = []
-    for bar in out:
-        if tail and bar.ts - tail[-1].ts != 120:
-            tail = []
-        tail.append(bar)
-    return tail
+    # Missing minutes are not fabricated. Preserve preceding completed bars:
+    # Pine advances over available chart bars rather than resetting at a gap.
+    return out
 
 
 def warmup_symbols(client, runtime, symbols: list[str], now: float | None = None) -> dict[str, int]:
     now = datetime.now(ET).timestamp() if now is None else now
     current = datetime.fromtimestamp(now, ET)
-    session_start = datetime.combine(current.date(), time(9, 30), tzinfo=ET)
+    session_start = datetime.combine(current.date(), time(4, 0), tzinfo=ET)
     if current.weekday() >= 5 or now <= session_start.timestamp():
         return {symbol: 0 for symbol in symbols}
-    start = max(current - timedelta(minutes=90), session_start)
+    start = session_start
     end = min(current, datetime.combine(current.date(), time(16, 0), tzinfo=ET))
     counts = {}
     for symbol in symbols:

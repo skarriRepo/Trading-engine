@@ -360,7 +360,7 @@ class SymbolStream:
         self._lock = threading.RLock()
         self._connected = connected
         self._last_price: Optional[Tuple[float, float]] = None
-        self._bars: Deque[Bar] = deque(maxlen=200)
+        self._bars: Deque[Bar] = deque(maxlen=600)
         self._net_flow: Deque[NetFlowSample] = deque(maxlen=600)
         self._interval_flow: Deque[IntervalFlowSample] = deque(maxlen=50)
         self._market_tide: Deque[MarketTideSample] = deque(maxlen=50)

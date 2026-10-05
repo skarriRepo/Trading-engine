@@ -246,6 +246,8 @@ class TestFullPositionLifecycleWiring(unittest.TestCase):
         for c in closes:
             rt.on_underlying_tick('AAPL', t, c)
             t += 120.0
+            if rt.positions:
+                break  # test lifecycle wiring at the first actual entry
 
         self.assertIn("AAPL260115C00150000", stream.symbols)
         _, pos = rt.positions['AAPL']

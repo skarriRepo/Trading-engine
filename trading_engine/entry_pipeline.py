@@ -4,13 +4,10 @@ Reads only from a SymbolSnapshot (symbol_state.py). Nothing here performs
 network I/O or blocks -- every input is already in the streamed, freshness-
 gated state built in stage 1.
 
-PSAR parameters default to (0.03, 0.02, 0.20), not the old system's
-(0.02, 0.02, 0.20) default. This is a real, evidenced choice, not a guess:
-tested earlier against real 2-minute-resampled candle data across the same
-46-symbol universe, (0.03, 0.02, 0.20) scored best on both flip count and
-forward-return quality (52.4% favorable) of every setting tried, including
-several deliberately quieter-looking ones that tested worse despite looking
-cleaner on a chart.
+PSAR uses Pine ta.sar calculation ordering and everget's SAR < close
+signal definition. Defaults remain (0.03, 0.02, 0.20); main.py accepts
+PSAR_START, PSAR_INCREMENT and PSAR_MAXIMUM. Historical replay results
+from the prior implementation do not validate this corrected implementation.
 
 UW confluence is deliberately NOT a straight port of the old majority-vote
 derivation. That approach was replayed against a real trading day and agreed
@@ -52,49 +49,54 @@ class PSARPoint:
 
 
 def compute_psar(bars: Tuple[Bar, ...], params: PSARParams = DEFAULT_PSAR) -> Tuple[PSARPoint, ...]:
-    """Standard Wilder's Parabolic SAR over a series of completed bars.
-    Returns one PSARPoint per bar from the third bar onward (the first two
-    bars establish the initial trend and starting SAR/EP). Empty input, or
-    fewer than 3 bars, returns an empty tuple -- the caller must treat that as
-    "not enough history yet", not as a flat/neutral reading.
+    """Pine ta.sar ordering; signals follow everget's SAR-versus-close rule.
+
+    The first valid SAR is on index 1. Reversal is checked before the
+    previous-two-bar clamp, and first trend bars do not increase acceleration.
     """
-    if len(bars) < 3:
+    if len(bars) < 2:
         return ()
-    uptrend = bars[1].close >= bars[0].close
-    sar = bars[0].low if uptrend else bars[0].high
-    ep = bars[0].high if uptrend else bars[0].low
+    below = bars[1].close > bars[0].close
+    ep = bars[1].high if below else bars[1].low
+    sar = bars[0].low if below else bars[0].high
     af = params.start
-    out: List[PSARPoint] = []
+    previous_direction = None
+    out = []
     for i in range(1, len(bars)):
         bar = bars[i]
-        prev_bar = bars[i - 1]
-        prior_sar = sar
-        new_sar = prior_sar + af * (ep - prior_sar)
-        is_flip = False
-        if uptrend:
-            new_sar = min(new_sar, prev_bar.low, bars[i - 2].low if i >= 2 else prev_bar.low)
-            if bar.low < new_sar:
-                is_flip = True
-                uptrend = False
-                new_sar = ep
-                ep = bar.low
-                af = params.start
-            elif bar.high > ep:
+        first_trend_bar = i == 1
+        sar += af * (ep - sar)
+        if below and sar > bar.low:
+            below = False
+            first_trend_bar = True
+            sar = max(bar.high, ep)
+            ep = bar.low
+            af = params.start
+        elif not below and sar < bar.high:
+            below = True
+            first_trend_bar = True
+            sar = min(bar.low, ep)
+            ep = bar.high
+            af = params.start
+        if not first_trend_bar:
+            if below and bar.high > ep:
                 ep = bar.high
-                af = min(params.maximum, af + params.increment)
+                af = min(af + params.increment, params.maximum)
+            elif not below and bar.low < ep:
+                ep = bar.low
+                af = min(af + params.increment, params.maximum)
+        if below:
+            sar = min(sar, bars[i - 1].low)
+            if i > 1:
+                sar = min(sar, bars[i - 2].low)
         else:
-            new_sar = max(new_sar, prev_bar.high, bars[i - 2].high if i >= 2 else prev_bar.high)
-            if bar.high > new_sar:
-                is_flip = True
-                uptrend = True
-                new_sar = ep
-                ep = bar.high
-                af = params.start
-            elif bar.low < ep:
-                ep = bar.low
-                af = min(params.maximum, af + params.increment)
-        sar = new_sar
-        out.append(PSARPoint(ts=bar.ts, sar=sar, direction=("CALL" if uptrend else "PUT"), is_flip=is_flip))
+            sar = max(sar, bars[i - 1].high)
+            if i > 1:
+                sar = max(sar, bars[i - 2].high)
+        direction = "CALL" if sar < bar.close else "PUT"
+        out.append(PSARPoint(bar.ts, sar, direction,
+                             previous_direction is not None and direction != previous_direction))
+        previous_direction = direction
     return tuple(out)
 
 

@@ -77,6 +77,12 @@ class TestPriorityOrdering(unittest.TestCase):
 
 
 class TestEpsilonTolerance(unittest.TestCase):
+    def setUp(self):
+        # Isolate option-trail tests from the corrected PSAR direction on flat bars.
+        mock = patch("trading_engine.exit_pipeline.compute_psar", return_value=())
+        mock.start()
+        self.addCleanup(mock.stop)
+
     def test_stale_bid_cannot_trigger_giveback_but_fresh_bid_can(self):
         snap, now = make_snapshot([100] * 12, direction='CALL')
         pos = PositionState(symbol='TEST', direction='CALL', opened_ts=now-300,

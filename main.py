@@ -54,6 +54,7 @@ from trading_engine.sandbox_execution import SandboxExecution
 from trading_engine.tradier_client import TradierAuthError
 from trading_engine.runtime import TradingRuntime
 from trading_engine.exit_pipeline import ExitConfig
+from trading_engine.entry_pipeline import EntryConfig, PSARParams
 from trading_engine.reversal_signals import ReversalSettings
 from trading_engine.dashboard_store import DashboardStore
 from trading_engine.history_warmup import warmup_symbols
@@ -169,6 +170,10 @@ def build_runtime() -> tuple:
         ask = float(row.get("ask") or 0)
         return (ts, bid, ask) if ts and bid > 0 else None
     rt = TradingRuntime(dashboard=dashboard, option_entry_price_provider=option_price_provider,
+                        entry_config=EntryConfig(psar=PSARParams(
+                            float(os.environ.get("PSAR_START", "0.03")),
+                            float(os.environ.get("PSAR_INCREMENT", "0.02")),
+                            float(os.environ.get("PSAR_MAXIMUM", "0.20")))),
                         order_executor=executor,
                         audit=audit,
                         exit_config=ExitConfig(reversal_phase_exit=reversal_exit_enabled,

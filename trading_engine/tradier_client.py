@@ -112,7 +112,7 @@ class TradierRestClient:
     def minute_candles(self, symbol: str, start_et: str, end_et: str) -> List[Dict[str, Any]]:
         """One-minute time-and-sales candles, with empty responses normalized."""
         body = self._get("/markets/timesales", {"symbol": symbol, "interval": "1min",
-                    "start": start_et, "end": end_et, "session_filter": "open"})
+                    "start": start_et, "end": end_et, "session_filter": "all"})
         series = body.get("series") if isinstance(body, dict) else None
         if not isinstance(series, dict):
             return []
