@@ -545,3 +545,18 @@ equality, and no future-bar dependence. Different feeds, earlier chart
 history, missing candles, and session selections can still produce different
 SAR values. Restart rebuilds the current session from REST candles, which
 may differ from previously observed stream candles. No webhook is required.
+
+### Dashboard restart recovery
+
+Startup restores today's ET signal decisions, reversal events, latest scan
+decisions and order statuses from the current daily audit JSONL. Closed
+trades are restored from the order journal after broker reconciliation, using
+live entry asks and exit bids for performance. Missing live prices, peaks or
+entry timestamps remain unknown; sandbox fills never replace them. Active
+positions continue to come exclusively from broker/journal reconciliation.
+Restored market-feed fields are NOT_READY until live updates arrive.
+
+Keep the same ENGINE_LOG_DIR and SANDBOX_ORDER_JOURNAL paths across launches.
+Signals and reversals retain the most recent 500 rows. Recovery streams the
+log and tolerates malformed/truncated lines. DASHBOARD_RECOVERY records the
+restored counts. Display recovery never places orders or replays old signals.

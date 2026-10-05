@@ -57,6 +57,7 @@ from trading_engine.exit_pipeline import ExitConfig
 from trading_engine.entry_pipeline import EntryConfig, PSARParams
 from trading_engine.reversal_signals import ReversalSettings
 from trading_engine.dashboard_store import DashboardStore
+from trading_engine.dashboard_recovery import restore_today
 from trading_engine.history_warmup import warmup_symbols
 from trading_engine.audit_log import AuditLog, ET
 from trading_engine.post_exit_observer import PostExitQuoteObserver
@@ -239,6 +240,13 @@ def build_runtime() -> tuple:
     rt.on_trade_closed = _on_trade_closed
     if executor is not None:
         executor.attach(rt)  # validates broker/journal state before any scanner signal
+
+    day = datetime.now(ET).date().isoformat()
+    recovered = restore_today(dashboard, audit.directory / f"engine_{day}.jsonl",
+                              executor.closed if executor else ())
+    audit.observers.append(dashboard.record_order_event)
+    audit.emit("DASHBOARD_RECOVERY", **recovered)
+    print(f"[dashboard] restored today's records: {recovered}", flush=True)
 
     warmup = warmup_symbols(data_client, rt, symbols)
     audit.emit("HISTORY_WARMUP", bar_counts=warmup,
