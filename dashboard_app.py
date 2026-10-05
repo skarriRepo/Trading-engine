@@ -48,16 +48,23 @@ def api_reversals() -> JSONResponse:
     return JSONResponse(store.reversal_view())
 
 
+def today_orders():
+    history = store.order_history_view()
+    current = order_executor.order_view() if order_executor else []
+    current_ids = {str(r["order_id"]) for r in current if r.get("order_id")}
+    return current + [r for r in history if str(r["order_id"]) not in current_ids]
+
+
 @app.get("/api/orders")
 def api_orders() -> JSONResponse:
-    return JSONResponse(order_executor.order_view() if order_executor else [])
+    return JSONResponse(today_orders())
 
 
 @app.get("/api/overview")
 def api_overview() -> JSONResponse:
     active = store.active_view()
     closed = store.closed_view()
-    orders = order_executor.order_view() if order_executor else []
+    orders = today_orders()
     scan = store.scan_view()
     return JSONResponse({
         "generated_ts": time.time(),

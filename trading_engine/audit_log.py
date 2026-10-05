@@ -19,6 +19,7 @@ class AuditLog:
         self.directory.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._last_report = 0.0
+        self.observers = []
 
     def emit(self, event: str, *, durable: bool = True, **fields) -> None:
         now = time.time()
@@ -31,6 +32,9 @@ class AuditLog:
                 f.flush()
                 if durable:
                     os.fsync(f.fileno())
+
+        for observer in self.observers:
+            observer(row)
 
     def report(self, day: str, journal_path: str = "sandbox_orders.json") -> Path:
         # Derive the report afresh from durable records so it can be regenerated.

@@ -51,8 +51,30 @@ class DashboardStore:
         self._closed: List[ClosedTrade] = []
         self._signals = deque(maxlen=500)
         self._reversals = deque(maxlen=500)
+        self._order_history = {}
         self._signal_keys = set()
         self._signal_key_order = deque()
+
+    def record_order_event(self, row):
+        if row.get("event") not in ("ORDER_SUBMITTED", "ORDER_STATUS", "ORDER_CANCEL_REQUESTED"):
+            return
+        oid = row.get("order_id")
+        if not oid:
+            return
+        with self._lock:
+            prior = self._order_history.get(str(oid), {})
+            self._order_history[str(oid)] = {
+                "symbol": row.get("symbol", prior.get("symbol", "")),
+                "side": row.get("side", prior.get("side", "")),
+                "option": prior.get("option", ""), "order_id": oid,
+                "status": row.get("status", "CANCEL_REQUESTED" if row["event"] == "ORDER_CANCEL_REQUESTED"
+                                      else prior.get("status", "SUBMITTED")),
+                "detail": "", "recorded_at_et": row.get("recorded_at_et")}
+
+    def order_history_view(self):
+        with self._lock:
+            return sorted((dict(r) for r in self._order_history.values()),
+                          key=lambda r: r.get("recorded_at_et") or "", reverse=True)
 
     # -- writes --
 
@@ -81,6 +103,10 @@ class DashboardStore:
 
     def record_reversal(self, symbol: str, event) -> None:
         with self._lock:
+            if any(r["symbol"] == symbol and r["bar_ts"] == event.bar_ts
+                   and r["kind"] == event.kind and r["direction"] == event.direction
+                   for r in self._reversals):
+                return
             self._reversals.appendleft({"symbol": symbol, "bar_ts": event.bar_ts,
                 "kind": event.kind, "direction": event.direction,
                 "perfected": event.perfected, "count": event.count,
@@ -226,6 +252,6 @@ class DashboardStore:
                     if t.broker_confirmed and t.exit_price > 0 else None,
                 "peak_gain_pct": t.peak_gain_pct, "final_gain_pct": t.final_gain_pct,
                 "exit_reasons": list(t.exit_reasons),
-                "duration_sec": round(t.closed_ts - t.entry_ts, 1),
+                "duration_sec": round(t.closed_ts - t.entry_ts, 1) if t.entry_ts is not None else None,
             })
         return rows
