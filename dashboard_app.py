@@ -83,3 +83,10 @@ def api_overview() -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return Path(__file__).with_name("dashboard.html").read_text(encoding="utf-8")
+
+
+@app.get("/api/signal-sources")
+def api_signal_sources():
+    return signal_sources
+
+signal_sources = {"psar": "ENGINE", "reversal": "ENGINE", "webhook_enabled": False}

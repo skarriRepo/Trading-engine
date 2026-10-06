@@ -120,6 +120,7 @@ class ExitConfig:
     # round-number starting point from that replay, not a tuned value --
     # NOT yet a live gate; see bleed_out_shadow.py's module docstring.
     bleed_out_loss_pct: float = -10.0
+    psar_exit_enabled: bool = True
     psar: PSARParams = DEFAULT_PSAR
     # Tolerance for price comparisons after floating-point quote arithmetic.
     epsilon: float = 1e-6
@@ -243,7 +244,7 @@ def evaluate_exit(snap: SymbolSnapshot, pos: PositionState, now: Optional[float]
     underlying_fresh = snap.price_state == "FRESH" and snap.bar_state == "FRESH"
     psar_points = compute_psar(bars, config.psar) if underlying_fresh and len(bars) >= 3 else ()
     psar_direction = psar_points[-1].direction if psar_points else None
-    opposite_psar = psar_direction == opposite
+    opposite_psar = config.psar_exit_enabled and psar_direction == opposite
 
     structure = structure_from_bars(bars) if underlying_fresh and bars else "MIXED"
     momentum_state = momentum_from_bars(bars) if underlying_fresh and bars else "NOT_READY"

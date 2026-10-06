@@ -9,7 +9,7 @@ from dotenv import dotenv_values, load_dotenv
 
 CREDENTIAL_KEYS = frozenset({
     "TRADIER_ACCESS_TOKEN", "TRADIER_LIVE_DATA_TOKEN",
-    "TRADIER_ACCOUNT_ID", "UW_API_KEY",
+    "TRADIER_ACCOUNT_ID", "UW_API_KEY", "WEBHOOK_SECRET",
 })
 
 
