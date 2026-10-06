@@ -131,6 +131,8 @@ def build_runtime() -> tuple:
         chain_source=chain_cache.get,
         on_selected=_selected_contract,
     )
+    import threading
+    entry_quote_clients = threading.local()
     def option_price_provider(symbol, direction, now, underlying_price):
         selected = selected_price_provider(symbol, direction, now, underlying_price)
         if not selected or not selected.occ_symbol:
@@ -138,7 +140,10 @@ def build_runtime() -> tuple:
                 audit.emit("CHAIN_PREFETCH_UNAVAILABLE", symbol=symbol, direction=direction,
                            market_ts=now)
             return None
-        row = data_client.quotes([selected.occ_symbol]).get(selected.occ_symbol) or {}
+        if not hasattr(entry_quote_clients, "client"):
+            entry_quote_clients.client = TradierRestClient(config=TradierConfig(base_url=PRODUCTION_BASE),
+                token=live_data_token or os.environ.get("TRADIER_ACCESS_TOKEN", "").strip())
+        row = entry_quote_clients.client.quotes([selected.occ_symbol]).get(selected.occ_symbol) or {}
         ask_ts = TradierPollClient._event_time(row.get("ask_date"))
         bid_ts = TradierPollClient._event_time(row.get("bid_date"))
         ask = float(row.get("ask") or 0)
@@ -203,6 +208,9 @@ def build_runtime() -> tuple:
     audit.emit("SIGNAL_SOURCE_CONFIG", psar=rt.psar_signal_source,
                reversal=rt.reversal_signal_source, webhook_enabled=webhook_enabled)
     print(f"Signal sources: PSAR={rt.psar_signal_source}, reversal={rt.reversal_signal_source}")
+    from concurrent.futures import ThreadPoolExecutor
+    rt.entry_workers = ThreadPoolExecutor(max_workers=3, thread_name_prefix="live-entry")
+    rt.async_entries = True
     rt.chain_cache = chain_cache
 
     def _on_underlying_tick(symbol, ts, price, volume):
@@ -342,6 +350,7 @@ def main() -> None:
         if webhook:
             webhook.close()
         tradier_stream.close()
+        rt.entry_workers.shutdown(wait=True, cancel_futures=True)
         rt.chain_cache.close()
         if executor is not None:
             executor.close()

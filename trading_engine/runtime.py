@@ -47,7 +47,12 @@ _trade_id_counter = itertools.count(1)
 def _serialized(method):
     @functools.wraps(method)
     def call(self, *args, **kwargs):
+        arrival = time.time()
         with self._state_lock:
+            lag = time.time() - arrival
+            if lag >= 1 and self.audit:
+                self.audit.emit("RUNTIME_CALLBACK_DELAY", callback=method.__name__,
+                                wait_sec=round(lag, 3))
             return method(self, *args, **kwargs)
     return call
 
@@ -264,6 +269,10 @@ class TradingRuntime:
     @_serialized
     def on_underlying_tick(self, symbol: str, ts: float, price: float, volume: float = 0.0) -> None:
         if self.order_executor and abs(time.time() - ts) > self.max_market_age_sec:
+            if self.audit:
+                self.audit.emit("UNDERLYING_TICK_REJECTED", durable=False, symbol=symbol,
+                                market_ts=ts, age_sec=round(time.time()-ts, 3),
+                                reason="STALE_OR_FUTURE_TIMESTAMP")
             return  # delayed or future market event cannot trigger broker orders
         self._last_underlying_wall[symbol] = time.time()
         if symbol in self._feed_warning:
@@ -626,7 +635,7 @@ class TradingRuntime:
                                 cutoff_et="15:30", candidate_cleared=True)
             self.dashboard.record_scan(snap, None, now=now)
             return
-        if self.order_executor and self._option_feed_warning:
+        if self.order_executor and symbol in self._option_feed_warning:
             self.dashboard.record_scan(snap, None, now=now)
             return
         if snap.price_state != "FRESH" or snap.bar_state != "FRESH":
@@ -676,7 +685,9 @@ class TradingRuntime:
         def log(reason):
             if self.audit:
                 self.audit.emit("WEBHOOK_SIGNAL_RESULT", symbol=symbol, reason=reason,
-                                indicator=signal["indicator"], signal=signal["signal"])
+                                indicator=signal["indicator"], signal=signal["signal"],
+                                broker_block=(self.order_executor.blocked.get(symbol)
+                                              if self.order_executor else None))
         if now > signal["expires_at"]:
             log("EXPIRED_IN_QUEUE")
             return
@@ -718,11 +729,48 @@ class TradingRuntime:
         decision = evaluate_entry(snap, direction, now=now, config=self.entry_config)
         self._audit_signal(symbol, direction, decision, now, "WEBHOOK_PSAR", signal["bar_time"], snap)
         if decision.action == "TAKE":
-            self._open_position(symbol, direction, snap, now)
+            self._open_position(symbol, direction, snap, now, expires_at=signal["expires_at"])
         self.dashboard.record_scan(snap, decision, now=now)
         log(decision.action)
 
-    def _open_position(self, symbol: str, direction: str, snap, now: float) -> bool:
+    def _prepare_live_entry(self, symbol, direction, price, trigger_ts, expires_at):
+        """Network calls outside the runtime lock; symbol reserved until receipt."""
+        submitted = False
+        try:
+            result = (self.option_entry_price_provider(symbol, direction, trigger_ts, price)
+                      if self.option_entry_price_provider else None)
+            wall = time.time()
+            with self._state_lock:
+                snap = self.store.snapshot(symbol, now=wall)
+                if (not result or result.price <= 0 or not result.occ_symbol
+                        or wall > expires_at or not self._entry_session(wall)
+                        or snap.price_state != "FRESH" or snap.bar_state != "FRESH"):
+                    self._entry_unavailable(symbol, direction, "ENTRY_PREPARATION_EXPIRED_OR_DATA_UNAVAILABLE", wall)
+                    self.pending_symbols.discard(symbol)
+                    return
+                if self.audit:
+                    self.audit.emit("CONTRACT_SELECTED", symbol=symbol, direction=direction,
+                                    occ_symbol=result.occ_symbol, ask=result.price, market_ts=wall)
+            # submit_entry persists intent before HTTP; unknown receipts remain blocked.
+            submitted = True
+            self.order_executor.submit_entry(symbol, direction, result.occ_symbol, wall, result.price)
+        except Exception as exc:
+            with self._state_lock:
+                self.pending_symbols.discard(symbol)
+                if submitted:
+                    self.blocked_symbols.add(symbol)
+                    self.order_executor.block(symbol, str(exc))
+                elif self.audit:
+                    self.audit.emit("ENTRY_PREPARATION_ERROR", symbol=symbol, error=type(exc).__name__)
+
+    def _open_position(self, symbol: str, direction: str, snap, now: float, expires_at=None) -> bool:
+        if self.order_executor and getattr(self, "async_entries", False):
+            if symbol in self.pending_symbols or symbol in self.blocked_symbols:
+                return False
+            self.pending_symbols.add(symbol)
+            self.entry_workers.submit(self._prepare_live_entry, symbol, direction, snap.price, now,
+                                      expires_at if expires_at is not None else now + 30)
+            return True
         # Ask-first entry reference: for a long option, ask is what you
         # actually pay -- validated throughout this codebase. Without a real
         # provider wired in, TAKE is refused rather than silently priced off

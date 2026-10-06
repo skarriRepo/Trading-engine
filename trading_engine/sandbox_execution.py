@@ -107,6 +107,36 @@ class SandboxExecution:
                         or str(o.get("symbol") or "").upper() == symbol.upper())
                        for o in self.client.orders())
 
+    def _release_clear_working_order_blocks(self):
+        """Release only preflight working-order conflicts after broker verification."""
+        for symbol, reason in list(self.blocked.items()):
+            if not str(reason).startswith("Broker has a working order for "):
+                continue
+            if symbol in self.pending or symbol in self.open:
+                continue
+            positions = self.client.positions()
+            orders = self.client.orders()
+            if any(float(p.get("quantity") or 0) != 0 and
+                   str(p.get("symbol") or "").upper().startswith(symbol.upper()) for p in positions):
+                continue
+            relevant = [o for o in orders if
+                str(o.get("option_symbol") or "").upper().startswith(symbol.upper())
+                or str(o.get("symbol") or "").upper() == symbol.upper()]
+            terminal = {"filled", "canceled", "rejected", "expired"}
+            if any(str(o.get("status") or "").lower() not in terminal for o in relevant):
+                continue
+            self.blocked.pop(symbol)
+            try:
+                self._save()
+            except Exception:
+                self.blocked[symbol] = reason
+                raise
+            if self.runtime:
+                self.runtime.blocked_symbols.discard(symbol)
+            if self.audit:
+                self.audit.emit("BROKER_BLOCK_RELEASED", symbol=symbol,
+                                reason="WORKING_ORDER_CLEARED_AND_BROKER_FLAT")
+
     def _release_old_canceled_entries(self) -> None:
         """Reconcile prior journal blocks before restoring them to the runtime."""
         for symbol, reason in list(self.blocked.items()):
@@ -211,8 +241,11 @@ class SandboxExecution:
             for symbol in self.pending:
                 runtime.pending_symbols.add(symbol)
             self._release_old_canceled_entries()
+            self._release_clear_working_order_blocks()
             for symbol in self.blocked:
                 runtime.blocked_symbols.add(symbol)
+                if self.audit:
+                    self.audit.emit("BROKER_BLOCK_RESTORED", symbol=symbol, reason=self.blocked[symbol])
             self.reconcile()
             for symbol, record in self.open.items():
                 if self._broker_qty(self.client.positions(), record["occ_symbol"]) != record["quantity"]:
@@ -387,6 +420,7 @@ class SandboxExecution:
         if self.runtime is None:
             return
         with self._lock:
+            self._release_clear_working_order_blocks()
             symbols = list(self.pending)
         for symbol in symbols:
             try:
