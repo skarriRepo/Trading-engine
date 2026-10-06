@@ -18,6 +18,7 @@ class AuditLog:
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self._report_lock = threading.RLock()
         self._last_report = 0.0
         self.observers = []
 
@@ -41,13 +42,14 @@ class AuditLog:
         datetime.strptime(day, "%Y-%m-%d")
         events = []
         source = self.directory / f"engine_{day}.jsonl"
-        with self._lock:
+        with self._report_lock:
             if source.exists():
-                for line in source.read_text(encoding="utf-8").splitlines():
-                    try:
-                        events.append(json.loads(line))
-                    except (ValueError, TypeError):
-                        continue  # tolerate a truncated final line after a crash
+                with source.open(encoding="utf-8") as stream:
+                    for line in stream:
+                        try:
+                            events.append(json.loads(line))
+                        except (ValueError, TypeError):
+                            continue  # tolerate a truncated final line after a crash
             journal = Path(journal_path)
             data = json.loads(journal.read_text(encoding="utf-8")) if journal.exists() else {}
             closed = [r for r in data.get("closed", []) if r.get("day_et") == day]

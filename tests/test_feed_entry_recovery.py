@@ -50,7 +50,7 @@ class RecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             broker = Broker()
             ex = SandboxExecution(broker, journal_path=str(Path(d)/'journal.json'))
-            ex.runtime = SimpleNamespace(blocked_symbols={'SPY'})
+            ex.runtime = SimpleNamespace(blocked_symbols={'SPY'}, pending_symbols=set())
             for reason in ('Order debit $499.00 exceeds $300.00 cap.',
                            'Total sandbox debit cap reached.',
                            "Tradier rejected the order (HTTP 400): Unexpected server error",
@@ -116,3 +116,23 @@ class RecoveryTests(unittest.TestCase):
             self.assertTrue(rt._state_lock.acquire(timeout=.1))
             rt._state_lock.release()
             release.set()
+
+    def test_exit_lookup_block_releases_only_with_exact_held_quantity(self):
+        with tempfile.TemporaryDirectory() as d:
+            broker = Broker()
+            ex = SandboxExecution(broker, journal_path=str(Path(d)/'journal.json'))
+            ex.runtime = SimpleNamespace(blocked_symbols={'SPY'}, pending_symbols={'SPY'})
+            reason = '500 Server Error:  for url: https://sandbox.tradier.com/v1/accounts/test/orders?limit=1000&includeTags=true'
+            ex.blocked = {'SPY': reason}
+            ex.open = {'SPY': dict(occ_symbol='SPY260930C00600000', quantity=1)}
+            broker.held = [dict(symbol='SPY260930C00600000', quantity=2)]
+            ex._release_clear_working_order_blocks()
+            self.assertIn('SPY', ex.blocked)
+            broker.held[0]['quantity'] = 1
+            ex.pending = {'SPY': dict(status='UNKNOWN')}
+            ex._release_clear_working_order_blocks()
+            self.assertIn('SPY', ex.blocked)
+            ex.pending = {}
+            ex._release_clear_working_order_blocks()
+            self.assertNotIn('SPY', ex.blocked)
+            self.assertNotIn('SPY', ex.runtime.pending_symbols)

@@ -121,12 +121,21 @@ class SandboxExecution:
                 r"(?:500|502|503|504) Server Error:.* for url: https://sandbox\.tradier\.com/v1/accounts/[^/]+/orders\?.*", reason))
             if not (reason.startswith("Broker has a working order for ") or cap_failure or preview_failure or lookup_failure):
                 continue
-            if symbol in self.pending or symbol in self.open:
+            if symbol in self.pending or (symbol in self.open and not lookup_failure):
                 continue
             positions = self.client.positions()
             orders = self.client.orders()
-            if any(float(p.get("quantity") or 0) != 0 and
-                   str(p.get("symbol") or "").upper().startswith(symbol.upper()) for p in positions):
+            held = [p for p in positions if float(p.get("quantity") or 0) != 0 and
+                    str(p.get("symbol") or "").upper().startswith(symbol.upper())]
+            opened = self.open.get(symbol)
+            if opened:
+                # A failed GET before exit intent may recover with the exact
+                # journaled position still held; no uncertain POST is retried.
+                if (self._broker_qty(positions, opened["occ_symbol"]) != opened["quantity"]
+                        or any(str(p.get("symbol") or "").upper() !=
+                               opened["occ_symbol"].upper() for p in held)):
+                    continue
+            elif held:
                 continue
             relevant = [o for o in orders if
                 str(o.get("option_symbol") or "").upper().startswith(symbol.upper())
@@ -142,6 +151,8 @@ class SandboxExecution:
                 raise
             if self.runtime:
                 self.runtime.blocked_symbols.discard(symbol)
+                if lookup_failure:
+                    self.runtime.pending_symbols.discard(symbol)
             if self.audit:
                 self.audit.emit("BROKER_BLOCK_RELEASED", symbol=symbol,
                                 reason=("PREFLIGHT_CAP_RECHECK_REQUIRED" if cap_failure else

@@ -20,6 +20,17 @@ from test_dashboard import real_uptrend_snapshot
 
 
 class AuditLogTests(unittest.TestCase):
+    def test_report_lock_does_not_block_live_emit(self):
+        import threading
+        with tempfile.TemporaryDirectory() as d:
+            audit = AuditLog(d)
+            done = threading.Event()
+            with audit._report_lock:
+                worker = threading.Thread(target=lambda: (audit.emit('TEST'), done.set()))
+                worker.start()
+                self.assertTrue(done.wait(1))
+            worker.join()
+
     def test_intraday_report_refresh_is_throttled(self):
         with tempfile.TemporaryDirectory() as tmp:
             audit = AuditLog(tmp)
@@ -33,6 +44,9 @@ class AuditLogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             audit = AuditLog(tmp)
             rt = TradingRuntime(audit=audit)
+            # This quote-context test must not close its fixture after market hours.
+            from dataclasses import replace
+            rt.exit_config = replace(rt.exit_config, eod_force_close_et="23:59")
             now = datetime.now(ZoneInfo("America/New_York")).timestamp()
             rt.store.ingest_tick("SPY", now-20, 100.)
             pos = PositionState("SPY", "CALL", now-20, 1., occ_symbol="SPY-TEST")
