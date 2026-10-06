@@ -97,3 +97,27 @@ class RuntimeRoutingTests(unittest.TestCase):
         rt._open_position.assert_called_once()
         self.assertEqual(rt._open_position.call_args.args[:2],('NVDA','CALL'))
         self.assertEqual(rt._open_position.call_args.args[2].price,100)
+
+class StartupWiringTests(unittest.TestCase):
+    def test_main_uses_runtime_webhook_configuration(self):
+        from unittest.mock import Mock, patch
+        import main
+        import dashboard_app
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                receiver=Mock() if enabled else None
+                rt=SimpleNamespace(psar_signal_source='WEBHOOK' if enabled else 'ENGINE',
+                    reversal_signal_source='ENGINE',webhook_enabled=enabled,
+                    webhook_receiver=receiver,chain_cache=Mock(),audit=Mock())
+                stream=Mock()
+                with patch.object(main,'build_runtime',return_value=(rt,Mock(),stream,None,['NVDA'],None)),\
+                     patch('uvicorn.run') as serve,\
+                     patch.object(dashboard_app.app,'include_router') as router:
+                    main.main()
+                    serve.assert_called_once()
+                    self.assertEqual(dashboard_app.signal_sources['webhook_enabled'],enabled)
+                    if enabled:
+                        router.assert_called_once_with(receiver.router)
+                        receiver.close.assert_called_once()
+                    else:router.assert_not_called()
+                    stream.close.assert_called_once()

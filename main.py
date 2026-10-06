@@ -198,6 +198,8 @@ def build_runtime() -> tuple:
         raise ValueError("WEBHOOK signal source requires WEBHOOK_ENABLED=true")
     webhook = WebhookReceiver(rt, symbols, os.environ.get("WEBHOOK_SECRET", ""),
         float(os.environ.get("WEBHOOK_MAX_SIGNAL_AGE_SEC", "30"))) if webhook_enabled else None
+    rt.webhook_receiver = webhook
+    rt.webhook_enabled = webhook_enabled
     audit.emit("SIGNAL_SOURCE_CONFIG", psar=rt.psar_signal_source,
                reversal=rt.reversal_signal_source, webhook_enabled=webhook_enabled)
     print(f"Signal sources: PSAR={rt.psar_signal_source}, reversal={rt.reversal_signal_source}")
@@ -327,8 +329,9 @@ def main() -> None:
     dashboard_app.order_executor = executor
     dashboard_app.data_mode = "LIVE PRODUCTION MARKET DATA"
     dashboard_app.signal_sources = {"psar": rt.psar_signal_source,
-        "reversal": rt.reversal_signal_source, "webhook_enabled": webhook_enabled}
+        "reversal": rt.reversal_signal_source, "webhook_enabled": rt.webhook_enabled}
 
+    webhook = rt.webhook_receiver
     if webhook:
         dashboard_app.app.include_router(webhook.router)
 
