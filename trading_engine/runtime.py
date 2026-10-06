@@ -33,7 +33,7 @@ from .entry_pipeline import (EntryConfig, DEFAULT_ENTRY_CONFIG, evaluate_entry,
                              latest_psar_flip, PSARParams, uw_confluence,
                              compute_psar, momentum_from_bars)
 from .exit_pipeline import (ExitConfig, DEFAULT_EXIT_CONFIG, PositionState,
-                            evaluate_exit, structure_from_bars)
+                            evaluate_exit, structure_from_bars, ExitDecision)
 from .reversal_signals import ReversalSignals, ReversalSettings
 from .bid_exit_shadow import read_bid_exit
 from .bleed_out_shadow import read_bleed_out_exit
@@ -490,6 +490,14 @@ class TradingRuntime:
             quote_fresh = (not self.order_executor or self._quote_fresh(trade_id, time.time()))
             decision = evaluate_exit(snap, pos, now=now, config=self.exit_config,
                                      option_quote_fresh=quote_fresh, reversal_frame=reversal_frame)
+            external = getattr(self, "_webhook_exit", {}).get(symbol)
+            if external:
+                deadline, expected_trade, reason = external
+                exit_clock = time.time() if self.order_executor else now
+                if exit_clock > deadline or expected_trade != trade_id:
+                    self._webhook_exit.pop(symbol, None)
+                elif quote_fresh and pos.current_option_price > 0 and decision.state != "EXIT_PENDING":
+                    decision = ExitDecision("EXIT_PENDING", (reason,), pos.gain_pct(), pos.peak_gain_pct())
             if self.audit:
                 shadow = read_bid_exit(pos, now, quote_fresh, self.exit_config)
                 if shadow.reason and trade_id not in self._bid_shadow_first:
@@ -602,6 +610,10 @@ class TradingRuntime:
             self.dashboard.record_scan(snap, None, now=now)
             return
 
+        if getattr(self, "psar_signal_source", "ENGINE") == "WEBHOOK":
+            self.dashboard.record_scan(snap, None, now=now)
+            return
+
         if not entries_allowed:
             return
 
@@ -656,6 +668,59 @@ class TradingRuntime:
             if not self._open_position(symbol, flip.direction, snap, now):
                 self._entry_unavailable(symbol, flip.direction, "LIVE_OPTION_QUOTE_UNAVAILABLE_AT_FLIP", now)
         self.dashboard.record_scan(snap, decision, now=now)
+
+    @_serialized
+    def on_webhook_signal(self, signal):
+        now = time.time()
+        symbol = signal["symbol"]
+        def log(reason):
+            if self.audit:
+                self.audit.emit("WEBHOOK_SIGNAL_RESULT", symbol=symbol, reason=reason,
+                                indicator=signal["indicator"], signal=signal["signal"])
+        if now > signal["expires_at"]:
+            log("EXPIRED_IN_QUEUE")
+            return
+        source = getattr(self, "psar_signal_source" if signal["indicator"] == "PSAR"
+                         else "reversal_signal_source", "ENGINE")
+        if source != "WEBHOOK":
+            log("INACTIVE_SOURCE")
+            return
+        direction = signal["direction"]
+        if symbol in self.pending_symbols or symbol in self.blocked_symbols:
+            log("ORDER_PENDING_OR_BLOCKED")
+            return
+        if symbol in self.positions:
+            trade_id, pos = self.positions[symbol]
+            if direction == pos.direction:
+                log("SAME_DIRECTION")
+                return
+            if signal["bar_time"] < pos.opened_ts:
+                log("PRE_ENTRY_BAR")
+                return
+            if signal["indicator"] == "REVERSAL" and not getattr(self, "webhook_reversal_enabled", True):
+                log("REVERSAL_DISABLED")
+                return
+            if not hasattr(self, "_webhook_exit"):
+                self._webhook_exit = {}
+            self._webhook_exit[symbol] = (signal["expires_at"], trade_id,
+                "WEBHOOK_OPPOSITE_PERFECT_REVERSAL" if signal["indicator"] == "REVERSAL"
+                else "WEBHOOK_OPPOSITE_PSAR")
+            self._evaluate_symbol(symbol, now, entries_allowed=False)
+            log("EXIT_SIGNAL_ACCEPTED")
+            return
+        if signal["indicator"] != "PSAR":
+            log("NO_POSITION")
+            return
+        snap = self.store.snapshot(symbol, now=now)
+        if not self._entry_session(now) or snap.price_state != "FRESH" or snap.bar_state != "FRESH":
+            log("SESSION_OR_MARKET_DATA_UNAVAILABLE")
+            return
+        decision = evaluate_entry(snap, direction, now=now, config=self.entry_config)
+        self._audit_signal(symbol, direction, decision, now, "WEBHOOK_PSAR", signal["bar_time"], snap)
+        if decision.action == "TAKE":
+            self._open_position(symbol, direction, snap, now)
+        self.dashboard.record_scan(snap, decision, now=now)
+        log(decision.action)
 
     def _open_position(self, symbol: str, direction: str, snap, now: float) -> bool:
         # Ask-first entry reference: for a long option, ask is what you

@@ -560,3 +560,74 @@ Keep the same ENGINE_LOG_DIR and SANDBOX_ORDER_JOURNAL paths across launches.
 Signals and reversals retain the most recent 500 rows. Recovery streams the
 log and tolerates malformed/truncated lines. DASHBOARD_RECOVERY records the
 restored counts. Display recovery never places orders or replays old signals.
+
+### TradingView webhook signals (PSAR and LuxAlgo reversal)
+
+The separate `trading_engine/webhook.py` receiver runs on the dashboard server:
+`POST /webhook/tradingview` (local port 8000). Expose it through a public HTTPS
+reverse proxy/tunnel; TradingView cannot reach localhost. Enable TradingView 2FA.
+
+Restart after changing these local `.env` settings:
+
+```dotenv
+PSAR_SIGNAL_SOURCE=WEBHOOK
+REVERSAL_SIGNAL_SOURCE=WEBHOOK
+WEBHOOK_ENABLED=true
+WEBHOOK_MAX_SIGNAL_AGE_SEC=30
+WEBHOOK_SECRET=replace-with-a-long-random-local-ingress-secret
+```
+
+Each source independently accepts ENGINE or WEBHOOK. Defaults remain ENGINE
+with the receiver disabled. PSAR authority controls entries AND PSAR exits;
+reversal authority controls perfected reversal exits. There is no automatic
+fallback. Python indicators remain available for observations. Emergency stops,
+profit protection and EOD exits remain independent. `/api/signal-sources` exposes
+configuration, never secrets. Startup prints and audits selected sources.
+
+Use confirmed **Once Per Bar Close**, 2-minute standard candles, matching PSAR
+inputs and session settings. A watchlist alert can share one receiver across
+SPY, QQQ, IWM, TSLA, NVDA, AAPL, AMD, AMZN, META, MSFT, GOOGL and NFLX;
+otherwise create alerts per ticker. PSAR Long message:
+
+```json
+{"token":"YOUR_LOCAL_INGRESS_SECRET","symbol":"{{ticker}}","indicator":"PSAR","signal":"LONG","timeframe":"{{interval}}","bar_time":"{{time}}","sent_at":"{{timenow}}"}
+```
+
+PSAR Short uses `signal: "SHORT"`. LuxAlgo's **perfected bearish momentum
+completion** (red P) uses `indicator: "REVERSAL", signal: "BEARISH_PERFECTED"`;
+perfected bullish completion (green P) uses `BULLISH_PERFECTED`. Other fields are
+identical. Select the actual perfected alert condition in your LuxAlgo script;
+a generic completion, exhaustion or small marker is not equivalent. If its
+script does not expose separate perfected alert conditions, it needs an
+`alertcondition()`/`alert()` addition; receiver support does not create those
+TradingView conditions. Do not send chart prices or broker credentials.
+
+TradingView does not support custom headers; the `token` is a separate ingress
+secret in the message (the receiver also accepts X-Webhook-Token for local tests).
+Use HTTPS and keep the secret out of Git. Incoming payloads are not logged.
+
+Bar time must be the candle's OPEN timestamp in timezone-aware ISO format;
+only closed, aligned bars are accepted. Signal age is measured from bar close,
+not merely send time. The receiver rejects unsupported symbols/timeframes,
+malformed/expired/future messages and duplicate symbol/indicator/bar events.
+Deduplication is in memory and resets on process restart. A bounded worker
+queue prevents broker work from delaying HTTP acknowledgement. Revalidated
+queue expiry prevents old queued entries. Only configured authority acts;
+ENGINE-source messages are logged as inactive.
+
+PSAR webhook entries attempt immediately after receipt, using a fresh production
+underlying snapshot and the existing live option provider/order checks. Incoming
+signals do not override order caps, session hours, pending orders or broker
+reconciliation. An opposite PSAR signal closes an existing position rather than
+opening a simultaneous reverse position. Reversal signals only close the
+opposite side: red P closes CALL, green P closes PUT. Pre-entry reversal bars
+are ignored. Pending exits can wait for a fresh live option bid until the signal
+expires. TradingView disconnects do not disable independent emergency/EOD exits.
+Sandbox remains exclusively the order destination.
+
+Audit events: WEBHOOK_ACCEPTED, WEBHOOK_REJECTED, WEBHOOK_DUPLICATE,
+WEBHOOK_SIGNAL_RESULT, WEBHOOK_PROCESSING_ERROR and SIGNAL_SOURCE_CONFIG.
+HTTP queued means accepted by the transport, not an order fill.
+
+WEBHOOK_SECRET can also live in the existing private credentials file alongside
+your tokens, so updates do not replace it. Do not commit its value.

@@ -183,6 +183,24 @@ def build_runtime() -> tuple:
                         option_quote_recovery=_recover_option_quote if executor else None,
                         option_quote_timeout_sec=float(os.environ.get("OPTION_QUOTE_TIMEOUT_SEC", "20")),
                         max_market_age_sec=10)
+    from dataclasses import replace
+    from trading_engine.webhook import source, WebhookReceiver
+    rt.psar_signal_source = source(os.environ.get("PSAR_SIGNAL_SOURCE", "ENGINE"))
+    rt.reversal_signal_source = source(os.environ.get("REVERSAL_SIGNAL_SOURCE", "ENGINE"))
+    rt.exit_config = replace(rt.exit_config,
+        psar=rt.entry_config.psar,
+        psar_exit_enabled=rt.psar_signal_source == "ENGINE",
+        reversal_phase_exit=reversal_exit_enabled and rt.reversal_signal_source == "ENGINE")
+    # Keep the operator's reversal enable switch separate from source selection.
+    rt.webhook_reversal_enabled = reversal_exit_enabled
+    webhook_enabled = os.environ.get("WEBHOOK_ENABLED", "false").lower() in {"true", "1", "yes"}
+    if "WEBHOOK" in {rt.psar_signal_source, rt.reversal_signal_source} and not webhook_enabled:
+        raise ValueError("WEBHOOK signal source requires WEBHOOK_ENABLED=true")
+    webhook = WebhookReceiver(rt, symbols, os.environ.get("WEBHOOK_SECRET", ""),
+        float(os.environ.get("WEBHOOK_MAX_SIGNAL_AGE_SEC", "30"))) if webhook_enabled else None
+    audit.emit("SIGNAL_SOURCE_CONFIG", psar=rt.psar_signal_source,
+               reversal=rt.reversal_signal_source, webhook_enabled=webhook_enabled)
+    print(f"Signal sources: PSAR={rt.psar_signal_source}, reversal={rt.reversal_signal_source}")
     rt.chain_cache = chain_cache
 
     def _on_underlying_tick(symbol, ts, price, volume):
@@ -308,11 +326,18 @@ def main() -> None:
     dashboard_app.store = dashboard
     dashboard_app.order_executor = executor
     dashboard_app.data_mode = "LIVE PRODUCTION MARKET DATA"
+    dashboard_app.signal_sources = {"psar": rt.psar_signal_source,
+        "reversal": rt.reversal_signal_source, "webhook_enabled": webhook_enabled}
+
+    if webhook:
+        dashboard_app.app.include_router(webhook.router)
 
     import uvicorn
     try:
         uvicorn.run(dashboard_app.app, host="0.0.0.0", port=8000)
     finally:
+        if webhook:
+            webhook.close()
         tradier_stream.close()
         rt.chain_cache.close()
         if executor is not None:
