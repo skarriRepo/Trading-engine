@@ -170,7 +170,12 @@ def build_runtime() -> tuple:
 
     dashboard = DashboardStore()
     def _recover_option_quote(occ_symbol):
-        row = data_client.quotes([occ_symbol]).get(occ_symbol) or {}
+        client = getattr(entry_quote_clients, "client", None)
+        if client is None:
+            client = TradierRestClient(config=TradierConfig(base_url=PRODUCTION_BASE),
+                                       token=live_data_token or os.getenv("TRADIER_ACCESS_TOKEN"))
+            entry_quote_clients.client = client
+        row = client.quotes([occ_symbol]).get(occ_symbol) or {}
         ts = TradierPollClient._event_time(row.get("bid_date"))
         bid = float(row.get("bid") or 0)
         ask = float(row.get("ask") or 0)
@@ -211,6 +216,8 @@ def build_runtime() -> tuple:
     from concurrent.futures import ThreadPoolExecutor
     rt.entry_workers = ThreadPoolExecutor(max_workers=3, thread_name_prefix="live-entry")
     rt.async_entries = True
+    rt.io_workers = ThreadPoolExecutor(max_workers=2, thread_name_prefix="live-recovery")
+    rt.exit_workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="broker-exit")
     rt.chain_cache = chain_cache
 
     def _on_underlying_tick(symbol, ts, price, volume):
@@ -351,6 +358,8 @@ def main() -> None:
             webhook.close()
         tradier_stream.close()
         rt.entry_workers.shutdown(wait=True, cancel_futures=True)
+        rt.io_workers.shutdown(wait=True, cancel_futures=True)
+        rt.exit_workers.shutdown(wait=True)
         rt.chain_cache.close()
         if executor is not None:
             executor.close()

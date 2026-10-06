@@ -108,7 +108,7 @@ class StartupWiringTests(unittest.TestCase):
                 receiver=Mock() if enabled else None
                 rt=SimpleNamespace(psar_signal_source='WEBHOOK' if enabled else 'ENGINE',
                     reversal_signal_source='ENGINE',webhook_enabled=enabled,
-                    webhook_receiver=receiver,chain_cache=Mock(),entry_workers=Mock(),audit=Mock())
+                    webhook_receiver=receiver,chain_cache=Mock(),entry_workers=Mock(),io_workers=Mock(),exit_workers=Mock(),audit=Mock())
                 stream=Mock()
                 with patch.object(main,'build_runtime',return_value=(rt,Mock(),stream,None,['NVDA'],None)),\
                      patch('uvicorn.run') as serve,\

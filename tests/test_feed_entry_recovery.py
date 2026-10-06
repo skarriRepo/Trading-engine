@@ -53,7 +53,8 @@ class RecoveryTests(unittest.TestCase):
             ex.runtime = SimpleNamespace(blocked_symbols={'SPY'})
             for reason in ('Order debit $499.00 exceeds $300.00 cap.',
                            'Total sandbox debit cap reached.',
-                           "Tradier rejected the order (HTTP 400): Unexpected server error"):
+                           "Tradier rejected the order (HTTP 400): Unexpected server error",
+                           "500 Server Error:  for url: https://sandbox.tradier.com/v1/accounts/test/orders?limit=1000&includeTags=true"):
                 ex.blocked = {'SPY': reason}
                 broker.held = [dict(symbol='SPY260930C00600000', quantity=1)]
                 ex._release_clear_working_order_blocks()
@@ -88,3 +89,30 @@ class RecoveryTests(unittest.TestCase):
             self.assertNotIn('SPY', ex.pending)
             self.assertNotIn('SPY', ex.blocked)
             self.assertNotIn('SPY', ex.runtime.pending_symbols)
+
+    def test_slow_exit_does_not_hold_runtime_lock(self):
+        started = threading.Event(); release = threading.Event()
+        ex = Mock()
+        def slow(*args, **kwargs):
+            started.set(); release.wait(2)
+        ex.submit_exit.side_effect = slow
+        rt = TradingRuntime(order_executor=ex)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(rt._submit_exit_async, 'SPY', SimpleNamespace(), ('STOP',), time.time(), {})
+            self.assertTrue(started.wait(1))
+            self.assertTrue(rt._state_lock.acquire(timeout=.1))
+            rt._state_lock.release()
+            release.set()
+        ex.submit_exit.assert_called_once()
+
+    def test_slow_recovery_does_not_hold_runtime_lock(self):
+        started = threading.Event(); release = threading.Event()
+        def slow(*args):
+            started.set(); release.wait(2); return None
+        rt = TradingRuntime(order_executor=Mock(), option_quote_recovery=slow)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(rt._recover_quote, 'SPY', 'trade', 'occ')
+            self.assertTrue(started.wait(1))
+            self.assertTrue(rt._state_lock.acquire(timeout=.1))
+            rt._state_lock.release()
+            release.set()

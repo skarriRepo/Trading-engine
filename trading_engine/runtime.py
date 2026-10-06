@@ -349,7 +349,6 @@ class TradingRuntime:
                               observation_source="OPTION_QUOTE")
 
     @_serialized
-    @_serialized
     def on_clock(self, now: Optional[float] = None) -> None:
         """Independent EOD check and feed-health alarm; never creates entries."""
         now = time.time() if now is None else now
@@ -391,17 +390,14 @@ class TradingRuntime:
                 if (self.option_quote_recovery and
                         time.time() - self._option_recovery_last.get(trade_id, 0) >= 15):
                     self._option_recovery_last[trade_id] = time.time()
-                    try:
-                        quote = self.option_quote_recovery(pos.occ_symbol)
-                        if self.audit:
-                            self.audit.emit("OPTION_QUOTE_RECOVERY_ATTEMPT", symbol=symbol,
-                                            trade_id=trade_id, quote_returned=bool(quote))
-                        if quote:
-                            self.on_option_quote(pos.occ_symbol, *quote)
-                    except Exception as exc:
-                        if self.audit:
-                            self.audit.emit("OPTION_QUOTE_RECOVERY_ERROR", symbol=symbol,
-                                            trade_id=trade_id, error=str(exc))
+                    if getattr(self, "io_workers", None):
+                        pending = getattr(self, "_quote_recovery_pending", set())
+                        self._quote_recovery_pending = pending
+                        if trade_id not in pending:
+                            pending.add(trade_id)
+                            self.io_workers.submit(self._recover_quote, symbol, trade_id, pos.occ_symbol)
+                    else:
+                        self._recover_quote(symbol, trade_id, pos.occ_symbol)
         for symbol in list(self.store.symbols()) if self._regular_session(now) else []:
             last = self._last_underlying_wall.get(symbol)
             if last is not None and time.time() - last > self.feed_timeout_sec and symbol not in self._feed_warning:
@@ -409,6 +405,43 @@ class TradingRuntime:
                 if self.audit:
                     self.audit.emit("FEED_STALE", symbol=symbol, seconds_since_tick=round(time.time() - last, 1))
                 print(f"[market-data] STALE {symbol}: no fresh underlying tick; entries paused", flush=True)
+
+    def _recover_quote(self, symbol, trade_id, occ):
+        try:
+            quote = self.option_quote_recovery(occ)
+            if self.audit:
+                self.audit.emit("OPTION_QUOTE_RECOVERY_ATTEMPT", symbol=symbol,
+                                trade_id=trade_id, quote_returned=bool(quote))
+            if quote:
+                self.on_option_quote(occ, *quote)
+        except Exception as exc:
+            if self.audit:
+                self.audit.emit("OPTION_QUOTE_RECOVERY_ERROR", symbol=symbol,
+                                trade_id=trade_id, error=type(exc).__name__)
+        finally:
+            with self._state_lock:
+                getattr(self, "_quote_recovery_pending", set()).discard(trade_id)
+
+    def _remember_async(self, symbol, pos):
+        try:
+            self.order_executor.remember_position(pos)
+        except Exception as exc:
+            if self.audit:
+                self.audit.emit("POSITION_JOURNAL_ERROR", symbol=symbol, error=type(exc).__name__)
+        finally:
+            with self._state_lock:
+                self._remember_pending.discard(symbol)
+
+    def _submit_exit_async(self, symbol, pos, reasons, now, observation):
+        try:
+            self.order_executor.submit_exit(symbol, pos, reasons, now, observation=observation)
+        except Exception as exc:
+            # Broker lock is acquired outside the runtime lock.
+            self.order_executor.block(symbol, str(exc))
+            with self._state_lock:
+                self.blocked_symbols.add(symbol)
+            if self.audit:
+                self.audit.emit("BROKER_BLOCKED", symbol=symbol, reason=str(exc))
 
     @_serialized
     def on_net_flow(self, symbol: str, ts: float, dir_delta_flow: float) -> None:
@@ -588,7 +621,15 @@ class TradingRuntime:
             self.dashboard.record_exit_check(trade_id, pos, decision, now=now,
                                              finalize=self.order_executor is None)
             if self.order_executor:
-                self.order_executor.remember_position(pos)
+                if getattr(self, "io_workers", None):
+                    import copy
+                    pending = getattr(self, "_remember_pending", set())
+                    self._remember_pending = pending
+                    if symbol not in pending:
+                        pending.add(symbol)
+                        self.io_workers.submit(self._remember_async, symbol, copy.copy(pos))
+                else:
+                    self.order_executor.remember_position(pos)
             if decision.state == "EXIT_PENDING":
                 if self.order_executor:
                     self.pending_symbols.add(symbol)
@@ -601,8 +642,13 @@ class TradingRuntime:
                                        "quote_age_sec": round(time.time()-quote["market_ts"], 3)
                                            if quote.get("market_ts") else None,
                                        "underlying_price": snap.price, "reason": list(decision.reasons)}
-                        self.order_executor.submit_exit(symbol, pos, decision.reasons, now,
-                                                        observation=observation)
+                        if getattr(self, "exit_workers", None):
+                            import copy
+                            self.exit_workers.submit(self._submit_exit_async, symbol, copy.copy(pos),
+                                                     decision.reasons, now, observation)
+                        else:
+                            self.order_executor.submit_exit(symbol, pos, decision.reasons, now,
+                                                            observation=observation)
                     except Exception as exc:
                         self.blocked_symbols.add(symbol)
                         self.order_executor.block(symbol, str(exc))

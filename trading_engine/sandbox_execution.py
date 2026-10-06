@@ -115,7 +115,11 @@ class SandboxExecution:
                            or reason == "Total sandbox debit cap reached.")
             preview_failure = (reason.startswith("Tradier rejected the order (HTTP 400):")
                                and "Unexpected server error" in reason)
-            if not (reason.startswith("Broker has a working order for ") or cap_failure or preview_failure):
+            # Legacy requests.HTTPError from an order-list GET is preflight.
+            # Pending intents still prevent release after any uncertain POST.
+            lookup_failure = bool(re.fullmatch(
+                r"(?:500|502|503|504) Server Error:.* for url: https://sandbox\.tradier\.com/v1/accounts/[^/]+/orders\?.*", reason))
+            if not (reason.startswith("Broker has a working order for ") or cap_failure or preview_failure or lookup_failure):
                 continue
             if symbol in self.pending or symbol in self.open:
                 continue
@@ -423,8 +427,10 @@ class SandboxExecution:
     def submit_entry(self, symbol: str, direction: str, occ: str, now: float, ask: float) -> None:
         try:
             self._submit(symbol, direction, occ, "buy_to_open", now, entry_ask=ask)
-        except TradierOrderError as exc:
-            if (re.fullmatch(r"Order debit \$[0-9.]+ exceeds \$[0-9.]+ cap\.", str(exc))
+        except Exception as exc:
+            lookup_failure = (symbol not in self.pending and bool(re.fullmatch(
+                r"(?:500|502|503|504) Server Error:.* for url: https://sandbox\.tradier\.com/v1/accounts/[^/]+/orders\?.*", str(exc))))
+            if (lookup_failure or re.fullmatch(r"Order debit \$[0-9.]+ exceeds \$[0-9.]+ cap\.", str(exc))
                     or str(exc) == "Total sandbox debit cap reached."):
                 # No order intent or POST exists: retry only on a new signal.
                 if self.runtime:
