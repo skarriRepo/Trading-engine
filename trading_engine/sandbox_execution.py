@@ -87,7 +87,7 @@ class SandboxExecution:
                                  expected_occ: str | None = None) -> bool:
         """Require a terminal zero-fill receipt and an empty broker symbol."""
         if (str(order.get("id") or "") != str(order_id)
-                or str(order.get("status") or "").lower() != "canceled"
+                or str(order.get("status") or "").lower() not in {"canceled", "rejected", "expired"}
                 or str(order.get("side") or "").lower() != "buy_to_open"
                 or order.get("exec_quantity") is None
                 or float(order["exec_quantity"]) != 0
@@ -110,7 +110,12 @@ class SandboxExecution:
     def _release_clear_working_order_blocks(self):
         """Release only preflight working-order conflicts after broker verification."""
         for symbol, reason in list(self.blocked.items()):
-            if not str(reason).startswith("Broker has a working order for "):
+            reason = str(reason)
+            cap_failure = (re.fullmatch(r"Order debit \$[0-9.]+ exceeds \$[0-9.]+ cap\.", reason)
+                           or reason == "Total sandbox debit cap reached.")
+            preview_failure = (reason.startswith("Tradier rejected the order (HTTP 400):")
+                               and "Unexpected server error" in reason)
+            if not (reason.startswith("Broker has a working order for ") or cap_failure or preview_failure):
                 continue
             if symbol in self.pending or symbol in self.open:
                 continue
@@ -135,18 +140,25 @@ class SandboxExecution:
                 self.runtime.blocked_symbols.discard(symbol)
             if self.audit:
                 self.audit.emit("BROKER_BLOCK_RELEASED", symbol=symbol,
-                                reason="WORKING_ORDER_CLEARED_AND_BROKER_FLAT")
+                                reason=("PREFLIGHT_CAP_RECHECK_REQUIRED" if cap_failure else
+                                        "WORKING_ORDER_CLEARED_AND_BROKER_FLAT"))
 
     def _release_old_canceled_entries(self) -> None:
         """Reconcile prior journal blocks before restoring them to the runtime."""
         for symbol, reason in list(self.blocked.items()):
-            match = re.fullmatch(r"Broker buy_to_open canceled \((\d+)\)", str(reason))
+            match = re.fullmatch(r"Broker buy_to_open (?:canceled|rejected|expired) \((\d+)\)", str(reason))
             if not match or symbol in self.pending:
                 continue
             order_id = match.group(1)
             if self._canceled_entry_is_clear(symbol, self.client.get_order(order_id), order_id):
                 self.blocked.pop(symbol)
-                self._save()
+                try:
+                    self._save()
+                except Exception:
+                    self.blocked[symbol] = reason
+                    raise
+                if self.runtime:
+                    self.runtime.blocked_symbols.discard(symbol)
                 if self.audit:
                     self.audit.emit("BROKER_ENTRY_CANCELED_RELEASED", symbol=symbol,
                                     order_id=order_id, source="STARTUP_RECONCILIATION")
@@ -409,7 +421,18 @@ class SandboxExecution:
                 print(f"[sandbox] {side} unresolved for {symbol}: {exc}", flush=True)
 
     def submit_entry(self, symbol: str, direction: str, occ: str, now: float, ask: float) -> None:
-        self._submit(symbol, direction, occ, "buy_to_open", now, entry_ask=ask)
+        try:
+            self._submit(symbol, direction, occ, "buy_to_open", now, entry_ask=ask)
+        except TradierOrderError as exc:
+            if (re.fullmatch(r"Order debit \$[0-9.]+ exceeds \$[0-9.]+ cap\.", str(exc))
+                    or str(exc) == "Total sandbox debit cap reached."):
+                # No order intent or POST exists: retry only on a new signal.
+                if self.runtime:
+                    self.runtime.pending_symbols.discard(symbol)
+                if self.audit:
+                    self.audit.emit("ENTRY_UNAVAILABLE", symbol=symbol, reason=str(exc))
+                return
+            raise
 
     def submit_exit(self, symbol: str, pos, reasons: tuple, now: float,
                     observation: dict | None = None) -> None:
@@ -420,6 +443,7 @@ class SandboxExecution:
         if self.runtime is None:
             return
         with self._lock:
+            self._release_old_canceled_entries()
             self._release_clear_working_order_blocks()
             symbols = list(self.pending)
         for symbol in symbols:

@@ -91,7 +91,9 @@ class WebhookReceiver:
         try:
             signal = normalize(payload, self.symbols, self.runtime.bar_seconds, self.max_age, time.time())
         except (ValueError, TypeError, KeyError, OverflowError) as exc:
-            self.audit("WEBHOOK_REJECTED", reason=str(exc))
+            self.audit("WEBHOOK_REJECTED", reason=str(exc),
+                       **{k: str(payload.get(k, ""))[:80] for k in
+                          ("symbol", "indicator", "signal", "timeframe", "bar_time", "sent_at")})
             raise HTTPException(422, str(exc))
         key = (signal["symbol"], signal["indicator"], signal["bar_time"])
         with self.lock:

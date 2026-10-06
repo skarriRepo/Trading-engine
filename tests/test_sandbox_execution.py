@@ -293,8 +293,9 @@ class SandboxOrderLifecycle(unittest.TestCase):
 
     def test_entry_debit_cap_blocks_before_submission(self):
         with patch("trading_engine.sandbox_execution.datetime", SessionDate):
-            with self.assertRaisesRegex(Exception, "exceeds"):
-                self.executor.submit_entry("SPY", "CALL", OCC, 1., 10.00)
+            self.executor.submit_entry("SPY", "CALL", OCC, 1., 10.00)
+        self.assertNotIn("SPY", self.executor.pending)
+        self.assertNotIn("SPY", self.executor.blocked)
         self.assertEqual(self.broker.post_count, 0)
 
     def test_transient_windows_replace_denial_retries_without_order_duplication(self):

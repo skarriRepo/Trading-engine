@@ -179,6 +179,12 @@ class TradierStreamClient:
                 continue
             parsed = parse_stream_message(raw)
             if isinstance(parsed, ParsedTick):
+                wall = time.time()
+                last = getattr(self, "_last_delay_diagnostic", 0)
+                if self.on_diagnostic and wall - parsed.ts > 10 and wall - last >= 30:
+                    self._last_delay_diagnostic = wall
+                    self.on_diagnostic("STALE_AT_STREAM_RECEIPT",
+                                       f"{parsed.symbol} age_sec={wall-parsed.ts:.3f}")
                 self.on_tick(parsed.symbol, parsed.ts, parsed.price, parsed.volume)
             elif isinstance(parsed, ParsedQuote) and self.on_quote is not None:
                 self.on_quote(parsed.symbol, parsed.ts, parsed.bid, parsed.ask)

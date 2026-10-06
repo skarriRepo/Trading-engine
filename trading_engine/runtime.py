@@ -269,8 +269,15 @@ class TradingRuntime:
     @_serialized
     def on_underlying_tick(self, symbol: str, ts: float, price: float, volume: float = 0.0) -> None:
         if self.order_executor and abs(time.time() - ts) > self.max_market_age_sec:
-            if self.audit:
+            rejected = getattr(self, "_rejected_tick_summary", {})
+            self._rejected_tick_summary = rejected
+            last, count = rejected.get(symbol, (0, 0))
+            wall = time.time()
+            rejected[symbol] = (last, count + 1)
+            if self.audit and wall - last >= 30:
+                rejected[symbol] = (wall, 0)
                 self.audit.emit("UNDERLYING_TICK_REJECTED", durable=False, symbol=symbol,
+                                rejected_count=count + 1,
                                 market_ts=ts, age_sec=round(time.time()-ts, 3),
                                 reason="STALE_OR_FUTURE_TIMESTAMP")
             return  # delayed or future market event cannot trigger broker orders
@@ -759,9 +766,10 @@ class TradingRuntime:
                 self.pending_symbols.discard(symbol)
                 if submitted:
                     self.blocked_symbols.add(symbol)
-                    self.order_executor.block(symbol, str(exc))
                 elif self.audit:
                     self.audit.emit("ENTRY_PREPARATION_ERROR", symbol=symbol, error=type(exc).__name__)
+            if submitted:
+                self.order_executor.block(symbol, str(exc))
 
     def _open_position(self, symbol: str, direction: str, snap, now: float, expires_at=None) -> bool:
         if self.order_executor and getattr(self, "async_entries", False):
