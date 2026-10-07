@@ -488,6 +488,17 @@ class SandboxExecution:
                                         order_id=r["order_id"], status=r["status"],
                                         exec_quantity=order.get("exec_quantity"),
                                         avg_fill_price=order.get("avg_fill_price"))
+                    if (r["side"] == "sell_to_close" and status in {"open", "pending", "partially_filled"}
+                            and time.time() - r.get("submitted_at_wall", time.time()) >= 60
+                            and time.time() - r.get("last_stall_warning", 0) >= 60):
+                        r["last_stall_warning"] = time.time()
+                        self._save()
+                        if self.audit:
+                            self.audit.emit("EXIT_ORDER_STALLED", symbol=symbol,
+                                            order_id=r["order_id"], status=status,
+                                            exec_quantity=order.get("exec_quantity"),
+                                            age_sec=round(time.time()-r["submitted_at_wall"], 1))
+                        print(f"[sandbox] EXIT STILL WORKING {symbol} id={r['order_id']} status={status}; inspect broker", flush=True)
                     if (r["side"] == "buy_to_open" and status in {"open", "pending"}
                             and r.get("submitted_at_wall")
                             and time.time() - r["submitted_at_wall"] >= self.entry_timeout_sec

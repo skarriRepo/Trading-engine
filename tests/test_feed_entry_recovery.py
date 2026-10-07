@@ -136,3 +136,24 @@ class RecoveryTests(unittest.TestCase):
             ex._release_clear_working_order_blocks()
             self.assertNotIn('SPY', ex.blocked)
             self.assertNotIn('SPY', ex.runtime.pending_symbols)
+
+    def test_stalled_exit_is_reported_without_duplicate_order(self):
+        from unittest.mock import patch
+        from test_sandbox_execution import SessionDate
+        with tempfile.TemporaryDirectory() as d:
+            broker = Broker()
+            audit = Mock()
+            ex = SandboxExecution(broker, journal_path=str(Path(d)/'journal.json'), audit=audit)
+            ex.runtime = Mock()
+            with patch('trading_engine.sandbox_execution.datetime', SessionDate):
+                ex.submit_entry('SPY', 'CALL', 'SPY260930C00600000', time.time(), 1)
+            ex.pending['SPY']['side'] = 'sell_to_close'
+            ex.pending['SPY']['submitted_at_wall'] = time.time() - 61
+            ex.reconcile()
+            warnings = [c for c in audit.emit.call_args_list if c.args[0] == 'EXIT_ORDER_STALLED']
+            self.assertEqual(len(warnings), 1)
+            self.assertEqual(broker.post_count, 1)
+            ex.reconcile()
+            warnings = [c for c in audit.emit.call_args_list if c.args[0] == 'EXIT_ORDER_STALLED']
+            self.assertEqual(len(warnings), 1)
+            self.assertIn('SPY', ex.pending)

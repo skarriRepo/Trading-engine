@@ -219,6 +219,11 @@ def build_runtime() -> tuple:
     rt.io_workers = ThreadPoolExecutor(max_workers=2, thread_name_prefix="live-recovery")
     rt.exit_workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="broker-exit")
     rt.chain_cache = chain_cache
+    from trading_engine.live_recovery import LiveQuoteRecovery
+    rt.live_recovery = LiveQuoteRecovery(
+        TradierRestClient(config=TradierConfig(base_url=PRODUCTION_BASE),
+                          token=live_data_token or os.environ.get("TRADIER_ACCESS_TOKEN", "").strip()),
+        rt, symbols)
 
     def _on_underlying_tick(symbol, ts, price, volume):
         if symbol not in symbols:
@@ -336,6 +341,7 @@ def main() -> None:
     if executor is not None:
         executor.start()
     tradier_stream.start()
+    rt.live_recovery.start()
     if uw_stream is not None:
         uw_stream.start()
 
@@ -357,6 +363,7 @@ def main() -> None:
         if webhook:
             webhook.close()
         tradier_stream.close()
+        rt.live_recovery.close()
         rt.entry_workers.shutdown(wait=True, cancel_futures=True)
         rt.io_workers.shutdown(wait=True, cancel_futures=True)
         rt.exit_workers.shutdown(wait=True)

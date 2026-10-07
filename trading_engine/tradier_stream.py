@@ -185,7 +185,14 @@ class TradierStreamClient:
                     self._last_delay_diagnostic = wall
                     self.on_diagnostic("STALE_AT_STREAM_RECEIPT",
                                        f"{parsed.symbol} age_sec={wall-parsed.ts:.3f}")
+                started = time.monotonic()
                 self.on_tick(parsed.symbol, parsed.ts, parsed.price, parsed.volume)
+                elapsed = time.monotonic() - started
+                if (self.on_diagnostic and elapsed >= .25
+                        and time.time() - getattr(self, "_last_slow_callback", 0) >= 30):
+                    self._last_slow_callback = time.time()
+                    self.on_diagnostic("SLOW_TICK_CALLBACK",
+                                       f"{parsed.symbol} processing_sec={elapsed:.3f}")
             elif isinstance(parsed, ParsedQuote) and self.on_quote is not None:
                 self.on_quote(parsed.symbol, parsed.ts, parsed.bid, parsed.ask)
             elif parsed is None and self.on_diagnostic and not (
